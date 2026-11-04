@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Universal File Converter
 
 A local-first, open-source desktop application for converting documents, PDFs, images, audio, video, and archives.
@@ -85,3 +86,6 @@ Contributions should:
 ## Licensing
 
 The repository's own license must be selected before public release. Third-party engines retain their own licenses; see the notices distributed with each engine. Do not assume one license covers the entire application and all bundled dependencies.
+=======
+# Universal-File-Converter
+>>>>>>> 5d7a0e595fdf505178a8d2ed862eee93f6ebed9c
