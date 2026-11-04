@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Universal File Converter
 
 A local-first, open-source desktop application for converting documents, PDFs, images, audio, video, and archives.
@@ -13,7 +12,7 @@ Universal File Converter processes files on the user's own computer using mature
 
 There is no server-imposed upload limit, but practical file size is still constrained by available RAM, CPU, disk space, engine capabilities, and file complexity.
 
-## Planned technology
+## Technology
 
 - Tauri 2
 - React
@@ -39,7 +38,11 @@ Actual engine versions and availability will be documented per release and platf
 
 ## Development status
 
-Early planning / foundation stage. No conversion pair should be considered stable until it is implemented and passes the quality gates in `TESTING.md`.
+The application foundation is in place: the Tauri shell, the typed command boundary, the domain model, the capability registry, the five screens, and the automated checks.
+
+**No conversion pair is available yet.** The capability registry is empty on purpose, so the interface reports that nothing can be converted instead of offering a conversion that would fail. A pair only becomes selectable after an engine adapter, an integration fixture, an output validation, and a documentation entry exist.
+
+No conversion pair should be considered stable until it is implemented and passes the quality gates in `TESTING.md`.
 
 ## Repository documentation
 
@@ -50,23 +53,45 @@ Early planning / foundation stage. No conversion pair should be considered stabl
 - `SUPPORTED_FORMATS.md` — conversion capability matrix
 - `TESTING.md` — testing and release gates
 - `SECURITY.md` — security and privacy requirements
+- `docs/adr/` — architecture decision records
+- `tests/` — test layers and fixtures
 
 ## Development setup
 
 Prerequisites:
+
 - Git
-- Node.js LTS and the package manager selected by the repository
+- Node.js 22.12 or newer
+- pnpm 12 (`corepack enable` provides it)
 - Rust stable toolchain
 - Tauri 2 platform prerequisites for the operating system
 
-Follow the official Tauri 2 prerequisites for your OS. The exact commands will be added after the initial scaffold and package manager are selected.
+Follow the official Tauri 2 prerequisites for your OS. On Debian and Ubuntu the desktop build needs the web view development packages, for example `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `librsvg2-dev`, `libayatana-appindicator3-dev` and `patchelf`.
 
-Typical scaffold direction:
-1. Create a Tauri 2 application with React and TypeScript.
-2. Confirm the empty application builds on each target OS.
-3. Add the typed Rust command boundary.
-4. Implement the conversion registry and one end-to-end conversion pair.
-5. Add tests before expanding format coverage.
+```bash
+pnpm install
+pnpm check          # every check that CI runs
+pnpm tauri:dev      # start the desktop application
+```
+
+### Individual commands
+
+| Command                  | Purpose                                                            |
+| ------------------------ | ------------------------------------------------------------------ |
+| `pnpm dev`               | Frontend only, in the browser.                                     |
+| `pnpm tauri:dev`         | The desktop application with hot reload.                           |
+| `pnpm tauri:build`       | The installable application.                                       |
+| `pnpm test`              | Frontend unit and component tests.                                 |
+| `pnpm lint`              | ESLint, including the type aware rules.                            |
+| `pnpm typecheck`         | TypeScript without emitting.                                       |
+| `pnpm format:check`      | Prettier, in check mode.                                           |
+| `pnpm check`             | Everything above plus the Rust checks and the binding drift check. |
+| `pnpm generate:types`    | Regenerate the TypeScript bindings from the Rust types.            |
+| `pnpm fixtures:generate` | Generate the synthetic test fixtures.                              |
+| `cargo test -p ufc-core` | The domain tests, without a web view.                              |
+| `cargo test --workspace` | The domain and the desktop crate tests.                            |
+
+The generated TypeScript bindings in `src/types/generated/` are committed on purpose. CI regenerates them and fails when the committed copy is stale.
 
 Do not install or bundle every conversion engine before the engine manager and licensing review exist.
 
@@ -77,6 +102,7 @@ Conversion is designed to happen locally. The MVP should not upload files or col
 ## Contributing
 
 Contributions should:
+
 - follow `RULES.md`;
 - add or update tests;
 - update `SUPPORTED_FORMATS.md`;
@@ -86,6 +112,3 @@ Contributions should:
 ## Licensing
 
 The repository's own license must be selected before public release. Third-party engines retain their own licenses; see the notices distributed with each engine. Do not assume one license covers the entire application and all bundled dependencies.
-=======
-# Universal-File-Converter
->>>>>>> 5d7a0e595fdf505178a8d2ed862eee93f6ebed9c

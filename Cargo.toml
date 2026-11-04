@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = ["crates/ufc-core", "src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+license = "MIT"
+repository = "https://github.com/zeganian/Universal-File-Converter"
+authors = ["zeganian <zeganian123@gmail.com>"]
+
+[workspace.dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+thiserror = "2.0.21"
+ts-rs = { version = "12.0.1", features = ["uuid-impl", "semver-impl"] }
+uuid = { version = "1.29.0", features = ["v4", "serde"] }
+semver = { version = "1.0.27", features = ["serde"] }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "sync", "time", "process", "io-util"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+infer = "0.22.0"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

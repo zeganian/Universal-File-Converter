@@ -1,0 +1,7 @@
+dist
+node_modules
+target
+pnpm-lock.yaml
+src/types/generated
+src-tauri/icons
+coverage

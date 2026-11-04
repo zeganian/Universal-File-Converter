@@ -1,4 +1,5 @@
 # Security and Privacy Requirements
+
 ## Universal File Converter
 
 ## 1. Security posture
@@ -48,6 +49,7 @@ All files selected by the user must be treated as untrusted input. Conversion en
 ## 6. Resource exhaustion
 
 Consider:
+
 - decompression bombs;
 - huge image dimensions;
 - malformed PDFs;
@@ -62,6 +64,7 @@ Provide configurable concurrency and safe failure states. Avoid claiming a hard 
 ## 7. Logs and diagnostics
 
 Logs may include:
+
 - job ID;
 - engine and version;
 - conversion pair;
@@ -70,6 +73,7 @@ Logs may include:
 - sanitized error summary.
 
 Logs must not include:
+
 - file contents;
 - extracted text;
 - passwords;
@@ -80,6 +84,7 @@ Logs must not include:
 ## 8. Third-party engines
 
 Before bundling an engine:
+
 - review its license and build configuration;
 - include notices and license texts;
 - document codecs/features enabled;

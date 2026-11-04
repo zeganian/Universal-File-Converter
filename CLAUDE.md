@@ -1,6 +1,7 @@
 # Claude Code Project Instructions
 
 Before making changes, read these files in order:
+
 1. `PRD.md`
 2. `ARCHITECTURE.md`
 3. `RULES.md`
@@ -21,6 +22,7 @@ Before making changes, read these files in order:
 ## Initial milestone
 
 Build only the application foundation:
+
 - Tauri 2 + React + TypeScript scaffold.
 - Basic navigation and empty Convert screen.
 - Typed Rust command boundary.

@@ -1,0 +1,119 @@
+/*
+ * Design tokens for Universal File Converter.
+ *
+ * The values mirror `DESIGN.md` exactly. Components must consume the
+ * semantic token names and never hardcode a colour value.
+ */
+
+:root {
+  /* Light theme (default) */
+  --color-background: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-surface-muted: #eef1f4;
+  --color-text-primary: #17212b;
+  --color-text-secondary: #5f6b76;
+  --color-border: #dce2e8;
+  --color-accent: #2563eb;
+  --color-success: #16845b;
+  --color-warning: #a76510;
+  --color-danger: #c43d3d;
+  --color-info: #2878a8;
+
+  /* Status surfaces: tinted backgrounds for badges and banners. */
+  --color-success-surface: #e6f4ee;
+  --color-warning-surface: #fdf3e3;
+  --color-danger-surface: #fbeaea;
+  --color-info-surface: #e8f1f7;
+  --color-accent-surface: #e8effd;
+
+  --color-focus-ring: #2563eb;
+
+  /* Spacing scale (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Shape */
+  --radius-card: 12px;
+  --radius-control: 8px;
+  --radius-pill: 999px;
+
+  /* Typography */
+  --font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-size-body: 14px;
+  --font-size-meta: 12px;
+  --font-size-section: 16px;
+  --font-size-page: 24px;
+
+  /* Motion */
+  --transition-fast: 120ms;
+  --transition-base: 160ms;
+  --easing: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Layout */
+  --nav-width: 208px;
+  --content-padding: var(--space-6);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-background: #111820;
+    --color-surface: #19232d;
+    --color-surface-muted: #222f3b;
+    --color-text-primary: #f2f5f7;
+    --color-text-secondary: #a9b5c0;
+    --color-border: #34424f;
+    --color-accent: #6ea8fe;
+    --color-success: #4cc38a;
+    --color-warning: #f0b65a;
+    --color-danger: #ff7777;
+    --color-info: #75bde8;
+
+    --color-success-surface: #16302a;
+    --color-warning-surface: #33290f;
+    --color-danger-surface: #351d1d;
+    --color-info-surface: #162a36;
+    --color-accent-surface: #1b2c44;
+
+    --color-focus-ring: #6ea8fe;
+  }
+}
+
+:root[data-theme='dark'] {
+  --color-background: #111820;
+  --color-surface: #19232d;
+  --color-surface-muted: #222f3b;
+  --color-text-primary: #f2f5f7;
+  --color-text-secondary: #a9b5c0;
+  --color-border: #34424f;
+  --color-accent: #6ea8fe;
+  --color-success: #4cc38a;
+  --color-warning: #f0b65a;
+  --color-danger: #ff7777;
+  --color-info: #75bde8;
+
+  --color-success-surface: #16302a;
+  --color-warning-surface: #33290f;
+  --color-danger-surface: #351d1d;
+  --color-info-surface: #162a36;
+  --color-accent-surface: #1b2c44;
+
+  --color-focus-ring: #6ea8fe;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,11 @@
+# Workspace-wide Cargo configuration.
+#
+# `TS_RS_EXPORT_DIR` points the `ts-rs` derive macro at the frontend
+# folder, so that the TypeScript bindings are generated next to the code
+# that consumes them instead of into a second, divergent copy.
+#
+# `relative = true` resolves the path against the directory that
+# contains this file, so the value stays correct regardless of the
+# working directory the command is run from.
+[env]
+TS_RS_EXPORT_DIR = { value = "src/types/generated", relative = true }

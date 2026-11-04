@@ -1,4 +1,5 @@
 # Engineering Rules for AI Coding Agents
+
 ## Universal File Converter
 
 These rules are mandatory for Claude Code and other contributors.
@@ -101,6 +102,7 @@ These rules are mandatory for Claude Code and other contributors.
 ## 10. Definition of done
 
 A task is done only when:
+
 1. Implementation matches the requirement.
 2. Types and errors are handled.
 3. Unit/integration tests are added or updated.

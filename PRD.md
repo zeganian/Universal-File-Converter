@@ -1,4 +1,5 @@
 # Product Requirements Document (PRD)
+
 ## Universal File Converter
 
 - Status: Draft v1.0
@@ -19,6 +20,7 @@ Universal File Converter (UFC) is an open-source desktop application that conver
 Online converters commonly impose upload-size limits, queues, account requirements, privacy trade-offs, or paid tiers. Conversion may also fail silently or produce output that is technically created but unusable.
 
 UFC addresses these issues by:
+
 - processing files locally;
 - using mature, format-specific conversion engines;
 - validating outputs after conversion;
@@ -69,6 +71,7 @@ Primary job: "I have a file in format A and need a usable file in format B witho
 ## 7. MVP scope
 
 ### 7.1 Core workflow
+
 1. User selects or drags files into the application.
 2. Application detects file type using extension plus content/signature checks where practical.
 3. User selects an available output format.
@@ -79,6 +82,7 @@ Primary job: "I have a file in format A and need a usable file in format B witho
 8. User can open the output folder or view the error details.
 
 ### 7.2 MVP capabilities
+
 - File picker and drag-and-drop.
 - Single and batch conversion.
 - Conversion queue with per-file and overall progress where supported.
@@ -95,18 +99,19 @@ Primary job: "I have a file in format A and need a usable file in format B witho
 
 The table is an initial target, not a promise that every pair is supported. Publish a tested source-to-target matrix in `SUPPORTED_FORMATS.md`.
 
-| Family | Initial candidates | Engine |
-|---|---|---|
-| Documents | DOCX, ODT, RTF, TXT, HTML, Markdown | LibreOffice and/or Pandoc |
-| Office to PDF | DOCX, ODT, XLSX, ODS, PPTX, ODP to PDF | LibreOffice |
-| PDF | PDF to PNG/JPEG/TIFF; PDF text extraction | Poppler; dedicated PDF library where appropriate |
-| Images | PNG, JPEG, WebP, BMP, TIFF | ImageMagick or a vetted Rust image library |
-| Spreadsheets | XLSX, ODS, CSV | LibreOffice; format-specific libraries for limited tasks |
-| Presentations | PPTX, ODP | LibreOffice |
-| Audio/video | MP3, WAV, FLAC, AAC, OGG, MP4, MKV, MOV, AVI, WEBM | FFmpeg |
-| Archives | ZIP, TAR, GZ, 7Z | 7-Zip or platform-compatible archive libraries |
+| Family        | Initial candidates                                 | Engine                                                   |
+| ------------- | -------------------------------------------------- | -------------------------------------------------------- |
+| Documents     | DOCX, ODT, RTF, TXT, HTML, Markdown                | LibreOffice and/or Pandoc                                |
+| Office to PDF | DOCX, ODT, XLSX, ODS, PPTX, ODP to PDF             | LibreOffice                                              |
+| PDF           | PDF to PNG/JPEG/TIFF; PDF text extraction          | Poppler; dedicated PDF library where appropriate         |
+| Images        | PNG, JPEG, WebP, BMP, TIFF                         | ImageMagick or a vetted Rust image library               |
+| Spreadsheets  | XLSX, ODS, CSV                                     | LibreOffice; format-specific libraries for limited tasks |
+| Presentations | PPTX, ODP                                          | LibreOffice                                              |
+| Audio/video   | MP3, WAV, FLAC, AAC, OGG, MP4, MKV, MOV, AVI, WEBM | FFmpeg                                                   |
+| Archives      | ZIP, TAR, GZ, 7Z                                   | 7-Zip or platform-compatible archive libraries           |
 
 Important limitations:
+
 - PDF-to-DOCX is complex and may not preserve layout. Treat as experimental until quality tests pass.
 - Scanned PDF requires OCR; this is a separate capability and dependency, not equivalent to text extraction.
 - CSV has no universal formatting or formula model; encoding, delimiter, locale, and sheet selection matter.
@@ -115,23 +120,23 @@ Important limitations:
 
 ## 8. Functional requirements
 
-| ID | Requirement | Priority | Acceptance criteria |
-|---|---|---|---|
-| FR-001 | Add files | Must | Picker and drag/drop add valid paths without reading entire large files into UI memory |
-| FR-002 | Detect file type | Must | Extension and available signature checks; ambiguous types are shown as uncertain |
-| FR-003 | List valid targets | Must | Only tested/available conversion pairs are offered |
-| FR-004 | Dependency check | Must | Missing/incompatible engine is reported before job start |
-| FR-005 | Convert file | Must | Job produces output or a structured failure; no false success |
-| FR-006 | Batch queue | Must | Multiple files can be queued; one failure does not silently mark all as failed |
-| FR-007 | Progress | Must | Show progress when engine provides it; otherwise show indeterminate status |
-| FR-008 | Cancel | Should | Cancellation terminates child process safely and cleans temporary files |
-| FR-009 | Output naming | Must | Never overwrite without explicit confirmation; resolve collisions safely |
-| FR-010 | Output validation | Must | Check existence, non-zero size where applicable, expected type, and parser/open test when supported |
-| FR-011 | History | Should | Store metadata only; no file contents; user can clear history |
-| FR-012 | Logs | Must | Provide redacted, actionable diagnostics without leaking file contents |
-| FR-013 | Offline use | Must | No network required for conversion once app and engines are installed |
-| FR-014 | Settings | Should | Default output folder, collision policy, history retention, theme |
-| FR-015 | Accessibility | Should | Keyboard operation, focus states, labels, scalable UI |
+| ID     | Requirement        | Priority | Acceptance criteria                                                                                 |
+| ------ | ------------------ | -------- | --------------------------------------------------------------------------------------------------- |
+| FR-001 | Add files          | Must     | Picker and drag/drop add valid paths without reading entire large files into UI memory              |
+| FR-002 | Detect file type   | Must     | Extension and available signature checks; ambiguous types are shown as uncertain                    |
+| FR-003 | List valid targets | Must     | Only tested/available conversion pairs are offered                                                  |
+| FR-004 | Dependency check   | Must     | Missing/incompatible engine is reported before job start                                            |
+| FR-005 | Convert file       | Must     | Job produces output or a structured failure; no false success                                       |
+| FR-006 | Batch queue        | Must     | Multiple files can be queued; one failure does not silently mark all as failed                      |
+| FR-007 | Progress           | Must     | Show progress when engine provides it; otherwise show indeterminate status                          |
+| FR-008 | Cancel             | Should   | Cancellation terminates child process safely and cleans temporary files                             |
+| FR-009 | Output naming      | Must     | Never overwrite without explicit confirmation; resolve collisions safely                            |
+| FR-010 | Output validation  | Must     | Check existence, non-zero size where applicable, expected type, and parser/open test when supported |
+| FR-011 | History            | Should   | Store metadata only; no file contents; user can clear history                                       |
+| FR-012 | Logs               | Must     | Provide redacted, actionable diagnostics without leaking file contents                              |
+| FR-013 | Offline use        | Must     | No network required for conversion once app and engines are installed                               |
+| FR-014 | Settings           | Should   | Default output folder, collision policy, history retention, theme                                   |
+| FR-015 | Accessibility      | Should   | Keyboard operation, focus states, labels, scalable UI                                               |
 
 ## 9. Non-functional requirements
 
@@ -149,6 +154,7 @@ Important limitations:
 `Queued -> Validating -> WaitingForEngine -> Running -> ValidatingOutput -> Succeeded`
 
 Alternative terminal states:
+
 - `Failed`
 - `Cancelled`
 - `SucceededWithWarnings`
@@ -158,6 +164,7 @@ A job must not transition from a terminal state back to running. Every transitio
 ## 11. UX requirements
 
 Main screens:
+
 1. Home / Convert: drop zone, file list, target format, convert action.
 2. Queue: queued/running/completed jobs and progress.
 3. Results: output path, validation state, warnings, open-folder action.
@@ -182,6 +189,7 @@ Do not collect these metrics remotely by default. Use local test reports and opt
 ## 13. Release gates
 
 A conversion pair may be marked Stable only when:
+
 - automated tests cover representative valid and invalid inputs;
 - output opens in an independent reader/parser;
 - visual or content comparison has been performed where meaningful;

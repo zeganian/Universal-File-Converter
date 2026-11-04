@@ -1,0 +1,43 @@
+# Build artifacts
+/dist
+/dist-ssr
+/node_modules
+/.vite
+
+# Rust
+/target
+**/target
+*.pdb
+
+# Tauri
+src-tauri/target
+src-tauri/gen/schemas
+
+# Generated TypeScript bindings are committed on purpose: CI regenerates
+# them and fails when the committed copy is stale. Do not ignore them.
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Editors
+.idea
+.vscode/*
+!.vscode/extensions.json
+*.swp
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+Thumbs.db
+
+# Test artifacts
+/coverage
+/tests/quality/output
+# Fixtures are generated, not committed. See tests/fixtures/README.md.
+/tests/fixtures/generated

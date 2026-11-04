@@ -1,4 +1,5 @@
 # Design System
+
 ## Universal File Converter
 
 ## 1. Design direction
@@ -19,6 +20,7 @@ Create a modern, calm, utility-focused desktop interface. The product should fee
 Use semantic tokens rather than hardcoding colors in components.
 
 ### Light theme
+
 - `background`: #F7F8FA
 - `surface`: #FFFFFF
 - `surface-muted`: #EEF1F4
@@ -32,6 +34,7 @@ Use semantic tokens rather than hardcoding colors in components.
 - `info`: #2878A8
 
 ### Dark theme
+
 - `background`: #111820
 - `surface`: #19232D
 - `surface-muted`: #222F3B
@@ -57,6 +60,7 @@ Use semantic tokens rather than hardcoding colors in components.
 ## 5. Spacing and shape
 
 Use a 4px base spacing scale:
+
 - 4, 8, 12, 16, 20, 24, 32, 40, 48px.
 - Main content padding: 24px desktop; 16px compact.
 - Card radius: 12px.
@@ -84,6 +88,7 @@ Use a 4px base spacing scale:
 ## 8. Queue and result states
 
 Use explicit states:
+
 - Queued
 - Checking file
 - Waiting for engine

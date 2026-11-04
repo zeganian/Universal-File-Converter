@@ -1,4 +1,5 @@
 # Architecture and Technical Design
+
 ## Universal File Converter
 
 ## 1. Architecture overview
@@ -26,6 +27,12 @@ The frontend must never execute conversion commands directly. It requests a type
 
 ```text
 universal-file-converter/
+├── crates/
+│   └── ufc-core/                # Framework-agnostic domain logic
+│       ├── src/
+│       │   ├── domain/          # Formats, requests, results, job state, registry
+│       │   └── engines/         # Engine adapter contract
+│       └── tests/               # Domain integration tests
 ├── src/                         # React frontend
 │   ├── app/
 │   ├── components/
@@ -44,13 +51,10 @@ universal-file-converter/
 │   ├── icons/
 │   ├── src/
 │   │   ├── commands/
-│   │   ├── domain/
+│   │   ├── domain/              # Re-exports of the ufc-core types
 │   │   ├── services/
 │   │   ├── engines/
-│   │   ├── process/
-│   │   ├── storage/
-│   │   ├── security/
-│   │   └── main.rs
+│   │   └── lib.rs
 │   ├── Cargo.toml
 │   └── tauri.conf.json
 ├── resources/
@@ -65,6 +69,7 @@ universal-file-converter/
 │   ├── e2e/
 │   └── quality/
 ├── docs/
+│   └── adr/
 ├── scripts/
 ├── .github/workflows/
 ├── PRD.md
@@ -77,6 +82,8 @@ universal-file-converter/
 ├── README.md
 └── LICENSE
 ```
+
+The business rules live in `crates/ufc-core`, which does not depend on Tauri. The desktop crate owns the runtime, the command boundary and the wiring, and re-exports the domain types so that command signatures stay readable.
 
 ## 4. Engine adapter contract
 
@@ -96,6 +103,7 @@ Do not expose arbitrary executable paths or arbitrary command arguments to the f
 ## 5. Engine selection and hybrid strategy
 
 Selection order:
+
 1. Prefer a compatible bundled engine when present and approved for redistribution.
 2. Otherwise detect a supported system installation.
 3. Verify engine version and required capabilities.
@@ -147,6 +155,7 @@ A result should include the validation level achieved. Not every format supports
 ## 9. Progress model
 
 Represent progress as:
+
 - `Determinate { percent }` when engine provides trustworthy progress.
 - `Indeterminate` when work is underway without reliable progress.
 - `Stage { name }` for phases such as preparing, converting, validating.
@@ -198,6 +207,7 @@ Treat these as design examples; refine types and serialization before implementa
 ## 11. Frontend/backend boundary
 
 Expose typed commands such as:
+
 - `inspect_files(paths)`
 - `get_conversion_options(file_id)`
 - `start_conversion(requests)`
@@ -212,6 +222,7 @@ Use Tauri events for job state/progress updates. Validate every payload in Rust 
 ## 12. Local storage
 
 Store only what is necessary:
+
 - job ID;
 - source filename (optional/configurable);
 - source and output format;
@@ -233,7 +244,8 @@ Do not store document contents, extracted text, thumbnails, or full paths by def
 
 ## 14. Architecture decision records
 
-Create an ADR for major decisions:
+The records live in `docs/adr/`. Create an ADR for major decisions:
+
 - ADR-001: Tauri 2 and Rust backend.
 - ADR-002: hybrid bundled/system engine discovery.
 - ADR-003: local-only processing and no telemetry by default.

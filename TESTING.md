@@ -1,4 +1,5 @@
 # Testing and Quality Strategy
+
 ## Universal File Converter
 
 ## 1. Testing objectives
@@ -8,6 +9,7 @@ Prove that conversions produce usable output, failures are understandable, and u
 ## 2. Test layers
 
 ### Unit tests
+
 - Format detection and extension/signature mismatch.
 - Capability registry lookup.
 - Conversion option validation.
@@ -17,6 +19,7 @@ Prove that conversions produce usable output, failures are understandable, and u
 - Error mapping and log redaction.
 
 ### Adapter tests
+
 - Engine discovery and version parsing.
 - Argument construction.
 - Exit code handling.
@@ -25,6 +28,7 @@ Prove that conversions produce usable output, failures are understandable, and u
 - Missing executable and incompatible version behavior.
 
 ### Integration tests
+
 - Real conversion using small known fixtures.
 - Output existence and signature.
 - Output opens with an independent reader/parser.
@@ -33,6 +37,7 @@ Prove that conversions produce usable output, failures are understandable, and u
 - Temporary file cleanup.
 
 ### End-to-end tests
+
 - Add files through picker/drop.
 - Select a valid target.
 - Start and cancel a job.
@@ -43,6 +48,7 @@ Prove that conversions produce usable output, failures are understandable, and u
 ## 3. Fixture categories
 
 Maintain non-sensitive, redistributable test fixtures:
+
 - valid minimal file;
 - complex layout file;
 - malformed/corrupt file;
@@ -60,6 +66,7 @@ Do not commit copyrighted or private user documents as fixtures. Generate synthe
 ## 4. Reliability checks
 
 For every conversion:
+
 1. Verify process start and termination.
 2. Capture exit status.
 3. Check expected output path.
@@ -72,11 +79,13 @@ For every conversion:
 ## 5. Cross-platform matrix
 
 Run CI on:
+
 - Windows x64;
 - Linux x64 (and ARM64 if officially targeted);
 - macOS Apple Silicon and Intel if supported.
 
 Test both:
+
 - bundled engine path;
 - system engine path;
 - missing engine path.
@@ -86,6 +95,7 @@ Do not mark a conversion pair stable on an OS until its engine and output tests 
 ## 6. Large-file and resource tests
 
 Use increasing file-size bands, for example small, medium, large, and stress. Record:
+
 - input size;
 - output size;
 - peak memory if measurable;
