@@ -175,7 +175,8 @@ describe('ConvertPage', () => {
     expect(request?.outputDirectory).toBe('/home/user');
   });
 
-  it('does not offer a conversion for a file with an unknown format', async () => {    const user = userEvent.setup();
+  it('does not offer a conversion for a file with an unknown format', async () => {
+    const user = userEvent.setup();
     mockBackend({ availableConversions: true, engineCount: 1 });
     vi.mocked(inspectFiles).mockResolvedValue([
       {
