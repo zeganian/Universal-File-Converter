@@ -57,6 +57,53 @@ fn is_valid_slug(value: &str) -> bool {
         && !value.ends_with('-')
 }
 
+/// Maps a file extension to a format identifier.
+///
+/// The mapping is a naming rule of the product. It is used for the
+/// first, cheap detection of a file; the content signature is checked
+/// afterwards, so that a file that only looks like the format is
+/// rejected.
+pub fn from_extension(extension: &str) -> Option<FormatId> {
+    let extension = extension.trim_start_matches('.').to_lowercase();
+
+    let format = match extension.as_str() {
+        "png" => "png",
+        "jpg" | "jpeg" | "jpe" => "jpeg",
+        "gif" => "gif",
+        "bmp" => "bmp",
+        "webp" => "webp",
+        "tif" | "tiff" => "tiff",
+        "svg" => "svg",
+        "pdf" => "pdf",
+        "txt" | "text" => "txt",
+        "md" | "markdown" => "md",
+        "html" | "htm" => "html",
+        "csv" => "csv",
+        "docx" => "docx",
+        "odt" => "odt",
+        "rtf" => "rtf",
+        "xlsx" => "xlsx",
+        "ods" => "ods",
+        "pptx" => "pptx",
+        "mp3" => "mp3",
+        "wav" => "wav",
+        "flac" => "flac",
+        "ogg" | "oga" => "ogg",
+        "mp4" => "mp4",
+        "mkv" => "mkv",
+        "mov" => "mov",
+        "avi" => "avi",
+        "webm" => "webm",
+        "zip" => "zip",
+        "tar" => "tar",
+        "gz" => "gz",
+        "7z" => "7z",
+        _ => return None,
+    };
+
+    FormatId::new(format)
+}
+
 impl fmt::Display for FormatId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
@@ -110,5 +157,32 @@ mod tests {
     fn parses_invalid_value_into_error() {
         let err = FormatId::from_str("PNG").expect_err("must fail");
         assert_eq!(err.0, "PNG");
+    }
+
+    #[test]
+    fn known_extensions_map_to_their_format() {
+        assert_eq!(
+            from_extension("png").map(|id| id.to_string()),
+            Some("png".into())
+        );
+        assert_eq!(
+            from_extension("JPG").map(|id| id.to_string()),
+            Some("jpeg".into())
+        );
+        assert_eq!(
+            from_extension(".jpeg").map(|id| id.to_string()),
+            Some("jpeg".into())
+        );
+        assert_eq!(
+            from_extension("docx").map(|id| id.to_string()),
+            Some("docx".into())
+        );
+    }
+
+    #[test]
+    fn unknown_extensions_are_not_detected() {
+        assert!(from_extension("").is_none());
+        assert!(from_extension("xyz").is_none());
+        assert!(from_extension("tar.gz").is_none());
     }
 }

@@ -13,6 +13,9 @@ import { invoke } from '@tauri-apps/api/core';
 
 import type { ConversionErrorCode } from '@/types/generated/ConversionErrorCode';
 import type { ConversionCapability } from '@/types/generated/ConversionCapability';
+import type { ConversionRequest } from '@/types/generated/ConversionRequest';
+import type { ConversionResult } from '@/types/generated/ConversionResult';
+import type { FileInspection } from '@/types/generated/FileInspection';
 
 /**
  * Structured error returned by a backend command.
@@ -121,3 +124,42 @@ export function getCapabilities(): Promise<CapabilitySummary> {
 export function getEngineStatus(): Promise<EngineReport> {
   return call<EngineReport>('get_engine_status');
 }
+
+/** Detects the engines again, for example after installing one. */
+export function refreshEngineStatus(): Promise<EngineReport> {
+  return call<EngineReport>('refresh_engine_status');
+}
+
+/**
+ * Starts a conversion.
+ *
+ * The conversion runs in the background. The returned result carries
+ * the initial state of the job; every later state change arrives as a
+ * `job://updated` event.
+ */
+export function startConversion(request: ConversionRequest): Promise<ConversionResult> {
+  return call<ConversionResult>('start_conversion', { request });
+}
+
+/** Returns the state of a job. */
+export function getJob(jobId: string): Promise<ConversionResult | null> {
+  return call<ConversionResult | null>('get_job', { jobId });
+}
+
+/** Returns the state of every job. */
+export function listJobs(): Promise<ConversionResult[]> {
+  return call<ConversionResult[]>('list_jobs');
+}
+
+/** Cancels a running job. */
+export function cancelJob(jobId: string): Promise<boolean> {
+  return call<boolean>('cancel_job', { jobId });
+}
+
+/** Inspects the files that the user selected. */
+export function inspectFiles(paths: readonly string[]): Promise<FileInspection[]> {
+  return call<FileInspection[]>('inspect_files', { paths: [...paths] });
+}
+
+/** The event that carries a state change of a job. */
+export const JOB_UPDATED_EVENT = 'job://updated';

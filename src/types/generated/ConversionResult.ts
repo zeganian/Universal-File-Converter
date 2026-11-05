@@ -17,6 +17,14 @@ jobId: string,
  */
 status: JobStatus, 
 /**
+ * Name of the source file, without its directory.
+ *
+ * Only the name is kept, never the full path, so that the queue can
+ * show what is being converted without storing the location of the
+ * file (`ARCHITECTURE.md` section 12).
+ */
+sourceName?: string | null, 
+/**
  * Absolute path of the produced output, when one exists.
  */
 outputPath?: string | null, 

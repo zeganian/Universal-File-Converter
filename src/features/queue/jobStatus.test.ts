@@ -22,8 +22,8 @@ describe('job status helpers', () => {
   });
 
   it('returns the percentage only for determinate progress', () => {
-    expect(progressPercent({ kind: 'determinate', value: 42 })).toBe(42);
+    expect(progressPercent({ kind: 'determinate', value: { percent: 42 } })).toBe(42);
     expect(progressPercent({ kind: 'indeterminate' })).toBeNull();
-    expect(progressPercent({ kind: 'stage', value: 'converting' })).toBeNull();
+    expect(progressPercent({ kind: 'stage', value: { name: 'converting' } })).toBeNull();
   });
 });

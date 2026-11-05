@@ -17,6 +17,7 @@ export interface AppContextValue {
   readonly loading: boolean;
   readonly error: string | null;
   readonly refresh: () => Promise<void>;
+  readonly refreshEngines: () => Promise<void>;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);

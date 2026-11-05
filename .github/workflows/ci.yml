@@ -81,6 +81,58 @@ jobs:
       - name: Generated TypeScript bindings are up to date
         run: ./scripts/check-types-drift.sh
 
+  rust-engines:
+    name: Rust engine checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # The integration test of the PNG to JPEG pair performs a real
+      # conversion, so ImageMagick 7 has to be installed on the runner.
+      # The distribution packages ship ImageMagick 6, which is a
+      # different program with a different command line.
+      - name: Install ImageMagick 7
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y software-properties-common
+          sudo add-apt-repository -y ppa:dcreurope/imagemagick7
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y imagemagick
+
+      - name: Check the engine version
+        run: |
+          magick -version
+          if ! magick -version | grep -q "Version: ImageMagick 7"; then
+            echo "ImageMagick 7 is required for the integration test." >&2
+            exit 1
+          fi
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/ufc-engines
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Lint
+        run: cargo clippy -p ufc-engines --all-targets -- -D warnings
+
+      - name: Unit and integration tests
+        run: cargo test -p ufc-engines
+
+      - name: Generate the test fixtures
+        run: node scripts/generate-fixtures.mjs
+
+      - name: Integration test with the repository fixtures
+        run: cargo test -p ufc-engines --test conversion_png_to_jpeg
+
   rust-desktop:
     name: Rust desktop checks
     runs-on: ubuntu-latest

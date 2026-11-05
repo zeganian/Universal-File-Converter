@@ -25,8 +25,8 @@ pub const CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Re-export of the most frequently used domain types.
 pub mod prelude {
     pub use crate::domain::conversion::{
-        ConversionRequest, ConversionResult, EngineAvailability, EngineId, EngineSource,
-        EngineStatus, OverwritePolicy, ValidationLevel,
+        ConversionOptions, ConversionRequest, ConversionResult, EngineAvailability, EngineId,
+        EngineSource, EngineStatus, OverwritePolicy, ValidationLevel,
     };
     pub use crate::domain::error::{ConversionError, ConversionErrorCode, DomainResult};
     pub use crate::domain::format::FormatId;

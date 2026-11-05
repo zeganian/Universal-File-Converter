@@ -1,0 +1,37 @@
+[package]
+name = "ufc-engines"
+description = "Conversion engine adapters and process infrastructure for Universal File Converter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+ufc-core = { path = "../ufc-core" }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+semver = { workspace = true }
+tracing = { workspace = true }
+infer = { workspace = true }
+
+# Used as the independent reader for output validation: the output has
+# to be readable without ImageMagick (`ARCHITECTURE.md` section 8).
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
+
+# Used to kill the whole process group on Unix, so that a child of the
+# engine cannot survive a cancellation or a timeout. The `nix` crate
+# keeps the call out of an `unsafe` block.
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.31.3", features = ["signal", "process"] }
+
+[dev-dependencies]
+tempfile = "3.23.0"
+# The integration test writes its own fixtures and reads the produced
+# files with an independent decoder.
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
+uuid = { workspace = true }

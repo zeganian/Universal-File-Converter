@@ -2,7 +2,7 @@
 
 use serde::Serialize;
 use tauri::State;
-use ufc_core::prelude::*;
+use ufc_core::domain::registry::ConversionCapability;
 
 use crate::commands::app::CommandError;
 use crate::services::state::AppState;
@@ -23,13 +23,14 @@ pub struct CapabilitySummary {
 ///
 /// The frontend must derive the list of selectable target formats from
 /// this response and must not maintain its own hardcoded list
-/// (`SUPPORTED_FORMATS.md`, "Registry rules").
+/// (`SUPPORTED_FORMATS.md`, "Registry rules"). A pair is only offered
+/// when it is implemented and its engine is available on this device.
 ///
 /// # Errors
 /// Never fails.
 #[tauri::command]
 pub fn get_capabilities(state: State<'_, AppState>) -> Result<CapabilitySummary, CommandError> {
-    let registry = state.registry();
+    let registry = state.conversion().registry();
     let available_count = registry.available_count();
 
     Ok(CapabilitySummary {

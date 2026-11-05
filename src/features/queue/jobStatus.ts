@@ -47,5 +47,5 @@ export function statusLabel(status: JobStatus): string {
  */
 export function progressPercent(progress: Progress): number | null {
   if (progress.kind !== 'determinate') return null;
-  return progress.value;
+  return progress.value.percent;
 }

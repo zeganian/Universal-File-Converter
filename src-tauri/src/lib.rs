@@ -44,6 +44,12 @@ pub fn run() {
             commands::app::get_app_info,
             commands::capabilities::get_capabilities,
             commands::engines::get_engine_status,
+            commands::engines::refresh_engine_status,
+            commands::conversion::start_conversion,
+            commands::conversion::get_job,
+            commands::conversion::list_jobs,
+            commands::conversion::cancel_job,
+            commands::files::inspect_files,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Universal File Converter");

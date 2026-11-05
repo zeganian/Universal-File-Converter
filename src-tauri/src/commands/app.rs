@@ -30,7 +30,7 @@ pub fn get_app_info(state: State<'_, AppState>) -> Result<AppInfo, CommandError>
         name: "Universal File Converter".to_owned(),
         version: env!("CARGO_PKG_VERSION").to_owned(),
         core_version: ufc_core::CORE_VERSION.to_owned(),
-        has_available_conversions: state.registry().available_count() > 0,
+        has_available_conversions: state.conversion().registry().available_count() > 0,
     })
 }
 

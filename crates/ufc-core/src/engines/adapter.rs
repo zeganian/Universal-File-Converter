@@ -9,7 +9,7 @@
 
 use std::path::PathBuf;
 
-use crate::domain::conversion::{EngineId, EngineStatus, OverwritePolicy};
+use crate::domain::conversion::{ConversionOptions, EngineId, EngineStatus, OverwritePolicy};
 use crate::domain::error::DomainResult;
 use crate::domain::format::FormatId;
 use crate::domain::job::Progress;
@@ -56,12 +56,16 @@ impl EngineInvocation {
 pub struct ValidatedConversion {
     /// The source file to convert.
     pub input_path: PathBuf,
+    /// The format of the source file.
+    pub source_format: FormatId,
     /// The desired output format.
     pub target_format: FormatId,
     /// Directory that receives the output.
     pub output_directory: PathBuf,
     /// Policy for an already existing output file.
     pub overwrite_policy: OverwritePolicy,
+    /// Options that influence the conversion.
+    pub options: ConversionOptions,
 }
 
 /// The outcome of running an engine.

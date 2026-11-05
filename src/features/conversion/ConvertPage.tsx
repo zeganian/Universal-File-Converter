@@ -1,68 +1,86 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
+import { Badge } from '@/components/Badge';
 import { useAppInfo } from '@/app/useAppInfo';
+import { inspectFiles, startConversion } from '@/lib/ipc';
+import { formatBytes } from '@/lib/format';
+import type { FileInspection } from '@/types/generated/FileInspection';
+import type { OverwritePolicy } from '@/types/generated/OverwritePolicy';
 
 /**
- * The drop zone.
+ * The file intake.
  *
- * This milestone establishes the foundation only: the zone accepts
- * files and lists their names, but it does not start a conversion.
- * That is deliberate — no conversion can be performed yet, and the UI
- * must not pretend otherwise (`RULES.md` section 1).
- *
- * The names come from the web view's file list, which does not expose
- * the path on the disk. Resolving the real path belongs to the file
- * intake milestone and goes through the Rust command boundary.
+ * The paths come from the file dialog of the operating system or from
+ * a drag and drop onto the window. Both are handled by Tauri, so the
+ * application receives real paths and never guesses them from a file
+ * name.
  */
-export function DropZone({ onFilesSelected }: { onFilesSelected: (paths: string[]) => void }) {
+export function FileIntake({
+  onFilesSelected,
+  disabled,
+}: {
+  onFilesSelected: (paths: string[]) => void;
+  disabled?: boolean;
+}) {
   const [isDragging, setIsDragging] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [failure, setFailure] = useState<string | null>(null);
 
-  const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setIsDragging(true);
-  }, []);
+  const handleBrowse = useCallback(async () => {
+    setFailure(null);
 
-  const handleDragLeave = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setIsDragging(false);
-  }, []);
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const selection = await open({ multiple: true, directory: false });
 
-  const handleDrop = useCallback(
-    (event: React.DragEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      setIsDragging(false);
+      if (!selection) return;
 
-      const paths = Array.from(event.dataTransfer.files).map((file) => file.name);
+      const paths = Array.isArray(selection) ? selection : [selection];
       if (paths.length > 0) {
         onFilesSelected(paths);
       }
-    },
-    [onFilesSelected],
-  );
+    } catch {
+      setFailure(
+        'The file dialog is only available in the desktop application. Run the application with "pnpm tauri:dev".',
+      );
+    }
+  }, [onFilesSelected]);
 
-  const handleBrowse = useCallback(() => {
-    inputRef.current?.click();
-  }, []);
+  // The drag and drop of the operating system, including the paths.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
 
-  const handleInputChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(event.target.files ?? []);
-      if (files.length > 0) {
-        onFilesSelected(files.map((file) => file.name));
+    void (async () => {
+      try {
+        const { getCurrentWebview } = await import('@tauri-apps/api/webview');
+        const webview = getCurrentWebview();
+
+        unlisten = await webview.onDragDropEvent((event) => {
+          if (event.payload.type === 'over') {
+            setIsDragging(true);
+            return;
+          }
+
+          setIsDragging(false);
+
+          if (event.payload.type === 'drop' && event.payload.paths.length > 0) {
+            onFilesSelected(event.payload.paths);
+          }
+        });
+      } catch {
+        // The browser does not provide the desktop drag and drop. The
+        // file dialog stays available.
       }
-    },
-    [onFilesSelected],
-  );
+    })();
+
+    return () => unlisten?.();
+  }, [onFilesSelected]);
 
   return (
     <div
       className={isDragging ? 'drop-zone drop-zone--active' : 'drop-zone'}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
       data-testid="drop-zone"
     >
       <div className="drop-zone__content">
@@ -70,17 +88,19 @@ export function DropZone({ onFilesSelected }: { onFilesSelected: (paths: string[
         <p className="drop-zone__description">
           Drag files onto this window, or use the button below to browse.
         </p>
-        <button type="button" className="button button--primary" onClick={handleBrowse}>
+        <button
+          type="button"
+          className="button button--primary"
+          onClick={() => void handleBrowse()}
+          disabled={disabled}
+        >
           Add files
         </button>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          className="sr-only"
-          aria-label="Add files"
-          onChange={handleInputChange}
-        />
+        {failure ? (
+          <p className="field__hint" role="alert">
+            {failure}
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -89,16 +109,114 @@ export function DropZone({ onFilesSelected }: { onFilesSelected: (paths: string[
 /**
  * The Convert screen.
  *
- * It shows the drop zone, the detected capabilities and the reason why
- * no conversion can be started yet.
+ * The list of target formats comes from the capability registry of the
+ * backend. A target is only offered when the conversion is implemented
+ * and its engine is available on this device
+ * (`SUPPORTED_FORMATS.md`, "Registry rules").
  */
 export function ConvertPage() {
   const { capabilities, engines, loading, error } = useAppInfo();
-  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
+  const navigate = useNavigate();
 
-  const hasAvailableConversion = capabilities?.hasAvailableConversions ?? false;
-  const availableCount = capabilities?.availableCount ?? 0;
+  const [inspections, setInspections] = useState<FileInspection[]>([]);
+  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
+  const [outputDirectory, setOutputDirectory] = useState('');
+  const [policy, setPolicy] = useState<OverwritePolicy>('rename');
+  const [quality, setQuality] = useState(92);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
+
   const engineCount = engines?.engines.length ?? 0;
+  const hasAvailableConversions = capabilities?.hasAvailableConversions ?? false;
+
+  const addFiles = useCallback((paths: string[]) => {
+    setFailure(null);
+
+    void (async () => {
+      try {
+        const inspected = await inspectFiles(paths);
+        setInspections(inspected);
+
+        const first = inspected[0];
+        if (first?.parentDirectory) {
+          setOutputDirectory((current) => current || first.parentDirectory || '');
+        }
+      } catch (cause: unknown) {
+        setFailure(cause instanceof Error ? cause.message : 'The files could not be inspected.');
+      }
+    })();
+  }, []);
+
+  // The files that can be converted at all. A file that could not be
+  // read is shown in the list, but it is never sent to the backend.
+  const convertible = useMemo(
+    () => inspections.filter((inspection) => inspection.readable),
+    [inspections],
+  );
+
+  // The targets that work for every selected file.
+  const targets = useMemo(() => {
+    if (!capabilities || convertible.length === 0) return [];
+
+    const perFile = convertible.map((inspection) => {
+      const format = inspection.format;
+      if (!format) return [] as string[];
+
+      return capabilities.capabilities
+        .filter((capability) => capability.available && capability.sourceFormat === format)
+        .map((capability) => capability.targetFormat);
+    });
+
+    if (perFile.length === 0) return [];
+
+    return perFile.reduce((common, targets) => common.filter((target) => targets.includes(target)));
+  }, [capabilities, convertible]);
+
+  // The target that is actually used. A selection that is not offered
+  // anymore falls back to the first available target, so that the
+  // selection never shows a format the backend does not support.
+  const target =
+    selectedTarget && targets.includes(selectedTarget) ? selectedTarget : (targets[0] ?? '');
+
+  const canConvert = convertible.length > 0 && target !== '' && outputDirectory !== '';
+
+  const start = useCallback(async () => {
+    if (!canConvert) return;
+
+    setIsStarting(true);
+    setFailure(null);
+
+    try {
+      for (const inspection of convertible) {
+        await startConversion({
+          fileId: crypto.randomUUID(),
+          inputPath: inspection.path,
+          targetFormat: target,
+          outputDirectory,
+          overwritePolicy: policy,
+          options: { quality },
+        });
+      }
+
+      await navigate('/queue');
+    } catch (cause: unknown) {
+      setFailure(cause instanceof Error ? cause.message : 'The conversion could not be started.');
+      setIsStarting(false);
+    }
+  }, [canConvert, convertible, target, outputDirectory, policy, quality, navigate]);
+
+  const chooseOutputDirectory = useCallback(async () => {
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const selection = await open({ directory: true, multiple: false });
+
+      if (typeof selection === 'string') {
+        setOutputDirectory(selection);
+      }
+    } catch {
+      setFailure('The folder dialog is only available in the desktop application.');
+    }
+  }, []);
 
   return (
     <div className="page">
@@ -114,17 +232,33 @@ export function ConvertPage() {
         </div>
       ) : null}
 
-      <DropZone onFilesSelected={setSelectedFiles} />
+      {failure ? (
+        <div className="alert alert--danger" role="alert">
+          <strong>The files could not be processed.</strong>
+          <span>{failure}</span>
+        </div>
+      ) : null}
 
-      {selectedFiles.length > 0 ? (
+      <FileIntake onFilesSelected={addFiles} disabled={isStarting} />
+
+      {inspections.length > 0 ? (
         <section className="panel" aria-labelledby="selected-files-heading">
           <h2 id="selected-files-heading" className="panel__title">
             Selected files
           </h2>
           <ul className="file-list">
-            {selectedFiles.map((name) => (
-              <li key={name} className="file-list__item">
-                {name}
+            {inspections.map((inspection) => (
+              <li key={inspection.path} className="file-list__item">
+                <span className="file-list__name">{inspection.fileName}</span>
+                <span className="file-list__meta">
+                  {inspection.format ?? 'unknown format'} · {formatBytes(inspection.sizeBytes)}
+                </span>
+                {inspection.extensionMismatch ? (
+                  <Badge tone="warning">Extension does not match the content</Badge>
+                ) : null}
+                {!inspection.readable ? (
+                  <Badge tone="danger">The file could not be read</Badge>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -138,12 +272,7 @@ export function ConvertPage() {
 
         {loading ? (
           <p className="panel__meta">Checking available conversions…</p>
-        ) : hasAvailableConversion ? (
-          <p className="panel__meta">
-            {availableCount} {availableCount === 1 ? 'conversion is' : 'conversions are'} available
-            on this device.
-          </p>
-        ) : (
+        ) : !hasAvailableConversions ? (
           <EmptyState
             title="No conversion is available yet"
             description={
@@ -152,8 +281,110 @@ export function ConvertPage() {
                 : 'The detected engines cannot convert any file pair yet. Conversion pairs become selectable once an engine implementation and its tests exist.'
             }
           />
+        ) : convertible.length === 0 ? (
+          <EmptyState
+            title="No file selected yet"
+            description="Add a file to see the formats it can be converted into."
+          />
+        ) : targets.length === 0 ? (
+          <EmptyState
+            title="No conversion is available for these files"
+            description="The selected files cannot be converted with the engines of this device. Choose other files, or install a different engine."
+          />
+        ) : (
+          <div className="field">
+            <label className="field__label" htmlFor="target-select">
+              Format
+            </label>
+            <select
+              id="target-select"
+              className="field__control"
+              value={target}
+              onChange={(event) => setSelectedTarget(event.target.value)}
+            >
+              {targets.map((format) => (
+                <option key={format} value={format}>
+                  {format.toUpperCase()}
+                </option>
+              ))}
+            </select>
+            <p className="field__hint">
+              The format applies to every selected file. Only formats that the installed engines can
+              produce are listed.
+            </p>
+          </div>
         )}
       </section>
+
+      {convertible.length > 0 && targets.length > 0 ? (
+        <section className="panel" aria-labelledby="output-heading">
+          <h2 id="output-heading" className="panel__title">
+            Output
+          </h2>
+
+          <div className="field">
+            <label className="field__label" htmlFor="output-directory">
+              Output folder
+            </label>
+            <div className="field__row">
+              <input
+                id="output-directory"
+                className="field__control"
+                value={outputDirectory}
+                onChange={(event) => setOutputDirectory(event.target.value)}
+              />
+              <button type="button" className="button" onClick={() => void chooseOutputDirectory()}>
+                Browse…
+              </button>
+            </div>
+          </div>
+
+          <div className="field">
+            <label className="field__label" htmlFor="policy-select">
+              If the file already exists
+            </label>
+            <select
+              id="policy-select"
+              className="field__control"
+              value={policy}
+              onChange={(event) => setPolicy(event.target.value as OverwritePolicy)}
+            >
+              <option value="rename">Write a new name (photo (2).jpg)</option>
+              <option value="skip">Keep the existing file and report the conflict</option>
+            </select>
+            <p className="field__hint">
+              An existing file is never replaced without an explicit decision.
+            </p>
+          </div>
+
+          <div className="field">
+            <label className="field__label" htmlFor="quality-range">
+              Quality
+            </label>
+            <input
+              id="quality-range"
+              className="field__control"
+              type="range"
+              min={1}
+              max={100}
+              value={quality}
+              onChange={(event) => setQuality(Number(event.target.value))}
+            />
+            <p className="field__hint">
+              Higher quality means a larger file. Current value: {quality}.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="button button--primary"
+            onClick={() => void start()}
+            disabled={!canConvert || isStarting}
+          >
+            Convert {convertible.length > 1 ? `${convertible.length} files` : 'file'}
+          </button>
+        </section>
+      ) : null}
     </div>
   );
 }

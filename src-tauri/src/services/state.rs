@@ -2,32 +2,30 @@
 
 use std::sync::Arc;
 
-use ufc_core::prelude::*;
+use ufc_engines::conversion::ConversionService;
 
+use crate::services::jobs::JobManager;
 use crate::services::settings::SettingsService;
 
 /// State shared by every Tauri command.
-///
-/// The state is immutable from the command layer's point of view: it
-/// exposes the settings service and the capability registry. Mutating
-/// settings goes through [`SettingsService::update`], which keeps the
-/// write path in one place.
 #[derive(Debug)]
 pub struct AppState {
     settings: Arc<SettingsService>,
-    registry: CapabilityRegistry,
+    conversion: Arc<ConversionService>,
+    jobs: Arc<JobManager>,
 }
 
 impl AppState {
     /// Creates the initial application state.
+    ///
+    /// The conversion service detects the engines of this device while
+    /// it is created, so the capability registry already reflects the
+    /// machine the application runs on.
     pub fn new(settings: Arc<SettingsService>) -> Self {
         Self {
             settings,
-            // The registry is empty because no engine adapter is
-            // implemented yet. It must stay empty until a real adapter,
-            // an integration fixture and a documentation entry exist
-            // (`CLAUDE.md` completion rule).
-            registry: ufc_core::domain::registry::default_registry(),
+            conversion: Arc::new(ConversionService::new()),
+            jobs: Arc::new(JobManager::new()),
         }
     }
 
@@ -36,8 +34,13 @@ impl AppState {
         &self.settings
     }
 
-    /// Returns the capability registry.
-    pub fn registry(&self) -> &CapabilityRegistry {
-        &self.registry
+    /// Returns the conversion service.
+    pub fn conversion(&self) -> &Arc<ConversionService> {
+        &self.conversion
+    }
+
+    /// Returns the job manager.
+    pub fn jobs(&self) -> &Arc<JobManager> {
+        &self.jobs
     }
 }

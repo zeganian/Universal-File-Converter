@@ -3,6 +3,7 @@
 /dist-ssr
 /node_modules
 /.vite
+*.tsbuildinfo
 
 # Rust
 /target

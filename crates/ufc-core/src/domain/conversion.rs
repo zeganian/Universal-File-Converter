@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
-use crate::domain::error::{ConversionError, ConversionErrorCode};
+use crate::domain::error::{ConversionError, ConversionErrorCode, DomainResult};
 use crate::domain::format::FormatId;
 use crate::domain::job::{JobStatus, Progress};
 
@@ -54,6 +54,106 @@ impl ValidationLevel {
     }
 }
 
+/// Options that influence how a conversion is performed.
+///
+/// The options are part of the domain model, not of an engine: they
+/// describe what the user asked for, and each adapter decides how to
+/// translate them into engine arguments.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ConversionOptions {
+    /// Encoder quality between 1 and 100. `None` uses the engine default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quality: Option<u8>,
+    /// Background colour used when the target format cannot store
+    /// transparency, for example when a PNG becomes a JPEG.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background: Option<String>,
+}
+
+impl ConversionOptions {
+    /// Lowest accepted quality.
+    pub const MIN_QUALITY: u8 = 1;
+    /// Highest accepted quality.
+    pub const MAX_QUALITY: u8 = 100;
+
+    /// Returns the options without any change.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the encoder quality.
+    #[must_use]
+    pub fn with_quality(mut self, quality: u8) -> Self {
+        self.quality = Some(quality);
+        self
+    }
+
+    /// Sets the background colour.
+    #[must_use]
+    pub fn with_background(mut self, background: impl Into<String>) -> Self {
+        self.background = Some(background.into());
+        self
+    }
+
+    /// Returns `true` when no option is set.
+    pub fn is_empty(&self) -> bool {
+        self.quality.is_none() && self.background.is_none()
+    }
+
+    /// Validates the options.
+    ///
+    /// # Errors
+    /// Returns [`ConversionErrorCode::InvalidOptions`] when the quality
+    /// is outside the accepted range or when the background colour is
+    /// not a plain colour token.
+    pub fn validate(&self) -> DomainResult<()> {
+        if let Some(quality) = self.quality {
+            if !(Self::MIN_QUALITY..=Self::MAX_QUALITY).contains(&quality) {
+                return Err(ConversionError::new(
+                    ConversionErrorCode::InvalidOptions,
+                    format!(
+                        "Quality must be between {} and {}.",
+                        Self::MIN_QUALITY,
+                        Self::MAX_QUALITY
+                    ),
+                )
+                .with_remediation("Choose a quality between 1 and 100."));
+            }
+        }
+
+        if let Some(background) = &self.background {
+            if !is_colour_token(background) {
+                return Err(ConversionError::new(
+                    ConversionErrorCode::InvalidOptions,
+                    "The background colour is not a valid colour.",
+                )
+                .with_remediation(
+                    "Use a colour name such as `white` or a hex value such as `#ffffff`.",
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Returns `true` when the value is a plain colour token.
+///
+/// Only names, hex values and simple functional notations are accepted.
+/// The value ends up in an engine argument vector, so it stays
+/// deliberately narrow.
+fn is_colour_token(value: &str) -> bool {
+    if value.is_empty() || value.len() > 32 {
+        return false;
+    }
+
+    value
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'#' || byte == b'-' || byte == b'_')
+}
+
 /// A request to convert one file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -69,10 +169,13 @@ pub struct ConversionRequest {
     pub output_directory: String,
     /// How to behave when the output file already exists.
     pub overwrite_policy: OverwritePolicy,
+    /// Options that influence the conversion.
+    #[serde(default)]
+    pub options: ConversionOptions,
 }
 
 impl ConversionRequest {
-    /// Creates a request with the `Skip` overwrite policy.
+    /// Creates a request with the `Skip` overwrite policy and no options.
     pub fn new(
         file_id: Uuid,
         input_path: impl Into<String>,
@@ -85,7 +188,15 @@ impl ConversionRequest {
             target_format,
             output_directory: output_directory.into(),
             overwrite_policy: OverwritePolicy::default(),
+            options: ConversionOptions::default(),
         }
+    }
+
+    /// Replaces the options of the request.
+    #[must_use]
+    pub fn with_options(mut self, options: ConversionOptions) -> Self {
+        self.options = options;
+        self
     }
 }
 
@@ -98,6 +209,13 @@ pub struct ConversionResult {
     pub job_id: Uuid,
     /// Final status of the job.
     pub status: JobStatus,
+    /// Name of the source file, without its directory.
+    ///
+    /// Only the name is kept, never the full path, so that the queue can
+    /// show what is being converted without storing the location of the
+    /// file (`ARCHITECTURE.md` section 12).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_name: Option<String>,
     /// Absolute path of the produced output, when one exists.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_path: Option<String>,
@@ -125,6 +243,7 @@ impl ConversionResult {
         Self {
             job_id,
             status,
+            source_name: None,
             output_path: None,
             engine_id: None,
             engine_version: None,
@@ -276,6 +395,31 @@ pub fn unsupported_pair(source: &FormatId, target: &FormatId) -> ConversionError
     )
 }
 
+/// Returns the file extension that is used for a format.
+///
+/// The extension is a naming rule of the product, not a property of the
+/// engine: `jpeg` is written as `.jpg`, which is what users expect.
+pub fn preferred_extension(format: &FormatId) -> &str {
+    match format.as_str() {
+        "jpeg" => "jpg",
+        other => other,
+    }
+}
+
+/// Returns the file name of the converted output.
+///
+/// The name is derived from the source file, so that the result is
+/// predictable for the user.
+pub fn output_file_name(input: &std::path::Path, target: &FormatId) -> String {
+    let stem = input
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().to_string())
+        .filter(|stem| !stem.is_empty())
+        .unwrap_or_else(|| "output".to_owned());
+
+    format!("{stem}.{}", preferred_extension(target))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -342,5 +486,71 @@ mod tests {
         assert_eq!(error.code, ConversionErrorCode::UnsupportedPair);
         assert!(error.message.contains("pdf"));
         assert!(error.message.contains("docx"));
+    }
+
+    #[test]
+    fn options_are_empty_by_default() {
+        let options = ConversionOptions::default();
+        assert!(options.is_empty());
+        assert!(options.quality.is_none());
+        assert!(options.background.is_none());
+        options.validate().expect("empty options are valid");
+    }
+
+    #[test]
+    fn quality_is_accepted_inside_the_range() {
+        for quality in [1, 50, 92, 100] {
+            ConversionOptions::new()
+                .with_quality(quality)
+                .validate()
+                .expect("quality must be accepted");
+        }
+    }
+
+    #[test]
+    fn quality_outside_the_range_is_rejected() {
+        for quality in [0, 101, 255] {
+            let error = ConversionOptions::new()
+                .with_quality(quality)
+                .validate()
+                .expect_err("quality must be rejected");
+            assert_eq!(error.code, ConversionErrorCode::InvalidOptions);
+            assert!(error.remediation.is_some());
+        }
+    }
+
+    #[test]
+    fn background_colour_accepts_names_and_hex_values() {
+        for background in ["white", "black", "#ffffff", "#fff", "grey50"] {
+            ConversionOptions::new()
+                .with_background(background)
+                .validate()
+                .expect("colour must be accepted");
+        }
+    }
+
+    #[test]
+    fn background_colour_rejects_anything_else() {
+        for background in ["", "white; rm -rf /", "rgb(0,0,0", "a b", "#ff f"] {
+            let error = ConversionOptions::new()
+                .with_background(background)
+                .validate()
+                .expect_err("colour must be rejected");
+            assert_eq!(error.code, ConversionErrorCode::InvalidOptions);
+        }
+    }
+
+    #[test]
+    fn a_request_carries_its_options() {
+        let request = ConversionRequest::new(
+            Uuid::nil(),
+            "/tmp/a.png",
+            FormatId::new("jpg").expect("valid"),
+            "/tmp/out",
+        )
+        .with_options(ConversionOptions::new().with_quality(80));
+
+        assert_eq!(request.options.quality, Some(80));
+        assert!(!request.options.is_empty());
     }
 }

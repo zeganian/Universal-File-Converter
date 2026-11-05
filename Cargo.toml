@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/ufc-core", "src-tauri"]
+members = ["crates/ufc-core", "crates/ufc-engines", "src-tauri"]
 
 [workspace.package]
 version = "0.1.0"

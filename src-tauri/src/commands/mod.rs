@@ -6,6 +6,8 @@
 
 pub mod app;
 pub mod capabilities;
+pub mod conversion;
 pub mod engines;
+pub mod files;
 
 pub use app::CommandError;

@@ -1,10 +1,8 @@
 //! Engine status reporting.
 
-use std::collections::BTreeMap;
-
 use serde::Serialize;
 use tauri::State;
-use ufc_core::prelude::*;
+use ufc_core::domain::conversion::EngineStatus;
 
 use crate::commands::app::CommandError;
 use crate::services::state::AppState;
@@ -21,16 +19,16 @@ pub struct EngineReport {
 
 /// Returns the status of every known conversion engine.
 ///
-/// No engine adapter is implemented in this milestone, therefore the
-/// report is empty and the UI shows that no engine has been detected
-/// yet. The application never claims an engine is present when it is
-/// not (`PRD.md` section 6, "Explicit dependencies").
+/// The engines are detected on this device: the report contains the
+/// exact version and the source of every installation, or the reason
+/// why the engine cannot be used (`PRD.md` FR-004, `DESIGN.md` section
+/// 9).
 ///
 /// # Errors
 /// Never fails.
 #[tauri::command]
 pub fn get_engine_status(state: State<'_, AppState>) -> Result<EngineReport, CommandError> {
-    let engines = known_engines(state.registry());
+    let engines = state.conversion().engine_status();
 
     Ok(EngineReport {
         available_count: engines
@@ -41,67 +39,54 @@ pub fn get_engine_status(state: State<'_, AppState>) -> Result<EngineReport, Com
     })
 }
 
-/// Builds the engine status list from the capability registry.
+/// Detects the engines again and returns the new status.
 ///
-/// Every engine referenced by a registered pair is reported. Engines
-/// that are referenced by no pair are not reported at all, because the
-/// application has no knowledge of them yet.
-fn known_engines(registry: &CapabilityRegistry) -> Vec<EngineStatus> {
-    let mut availability: BTreeMap<EngineId, EngineAvailability> = BTreeMap::new();
+/// The user can call this after installing an engine, without having to
+/// restart the application.
+///
+/// # Errors
+/// Never fails.
+#[tauri::command]
+pub fn refresh_engine_status(state: State<'_, AppState>) -> Result<EngineReport, CommandError> {
+    state.conversion().refresh();
 
-    for capability in registry.all() {
-        availability
-            .entry(capability.engine_id.clone())
-            .or_insert(EngineAvailability::Missing);
-    }
+    let engines = state.conversion().engine_status();
 
-    availability
-        .into_iter()
-        .map(|(engine_id, engine_availability)| EngineStatus {
-            display_name: engine_id.as_str().to_owned(),
-            engine_id,
-            availability: engine_availability,
-            source: None,
-            version: None,
-            installation_hint: None,
-            reason: Some(
-                ConversionError::new(
-                    ConversionErrorCode::MissingDependency,
-                    "No engine detection is implemented in this build.",
-                )
-                .with_remediation("Engine detection will be available in a later milestone."),
-            ),
-        })
-        .collect()
+    Ok(EngineReport {
+        available_count: engines
+            .iter()
+            .filter(|engine| engine.availability.is_usable())
+            .count(),
+        engines,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ufc_core::domain::registry::{ConversionCapability, PairStatus};
+    use ufc_core::domain::conversion::{EngineAvailability, EngineId};
+    use ufc_core::domain::error::{ConversionError, ConversionErrorCode};
 
     #[test]
-    fn empty_registry_reports_no_engines() {
-        let registry = CapabilityRegistry::empty();
-        let engines = known_engines(&registry);
-        assert!(engines.is_empty());
-    }
+    fn a_missing_engine_carries_a_reason_and_a_hint() {
+        let engine = EngineStatus {
+            engine_id: EngineId::new("imagemagick").expect("valid"),
+            display_name: "ImageMagick".to_owned(),
+            availability: EngineAvailability::Missing,
+            source: None,
+            version: None,
+            installation_hint: Some("Install ImageMagick 7.".to_owned()),
+            reason: Some(
+                ConversionError::new(
+                    ConversionErrorCode::MissingDependency,
+                    "ImageMagick was not found on this device.",
+                )
+                .with_remediation("Install ImageMagick 7."),
+            ),
+        };
 
-    #[test]
-    fn referenced_engine_is_reported_as_missing() {
-        let mut capability = ConversionCapability::planned(
-            FormatId::new("png").expect("valid"),
-            FormatId::new("pdf").expect("valid"),
-            EngineId::new("imagemagick").expect("valid"),
-        );
-        capability.status = PairStatus::Stable;
-
-        let registry = CapabilityRegistry::new(vec![capability]);
-        let engines = known_engines(&registry);
-
-        assert_eq!(engines.len(), 1);
-        assert_eq!(engines[0].availability, EngineAvailability::Missing);
-        assert!(!engines[0].availability.is_usable());
-        assert!(engines[0].reason.is_some());
+        assert!(!engine.availability.is_usable());
+        assert!(engine.reason.is_some());
+        assert!(engine.installation_hint.is_some());
     }
 }

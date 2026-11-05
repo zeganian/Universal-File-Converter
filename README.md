@@ -40,7 +40,7 @@ Actual engine versions and availability will be documented per release and platf
 
 The application foundation is in place: the Tauri shell, the typed command boundary, the domain model, the capability registry, the five screens, and the automated checks.
 
-**No conversion pair is available yet.** The capability registry is empty on purpose, so the interface reports that nothing can be converted instead of offering a conversion that would fail. A pair only becomes selectable after an engine adapter, an integration fixture, an output validation, and a documentation entry exist.
+**One conversion pair is implemented: PNG to JPEG, with ImageMagick 7.** The pair is _experimental_: the engine, the integration tests and the output validation exist, but the release gates of `TESTING.md` have not run on Windows and macOS yet. Every other pair in the matrix is still _planned_, and the interface reports it as such instead of offering a conversion that would fail. A pair only becomes selectable after an engine adapter, an integration fixture, an output validation, and a documentation entry exist.
 
 No conversion pair should be considered stable until it is implemented and passes the quality gates in `TESTING.md`.
 
@@ -76,20 +76,21 @@ pnpm tauri:dev      # start the desktop application
 
 ### Individual commands
 
-| Command                  | Purpose                                                            |
-| ------------------------ | ------------------------------------------------------------------ |
-| `pnpm dev`               | Frontend only, in the browser.                                     |
-| `pnpm tauri:dev`         | The desktop application with hot reload.                           |
-| `pnpm tauri:build`       | The installable application.                                       |
-| `pnpm test`              | Frontend unit and component tests.                                 |
-| `pnpm lint`              | ESLint, including the type aware rules.                            |
-| `pnpm typecheck`         | TypeScript without emitting.                                       |
-| `pnpm format:check`      | Prettier, in check mode.                                           |
-| `pnpm check`             | Everything above plus the Rust checks and the binding drift check. |
-| `pnpm generate:types`    | Regenerate the TypeScript bindings from the Rust types.            |
-| `pnpm fixtures:generate` | Generate the synthetic test fixtures.                              |
-| `cargo test -p ufc-core` | The domain tests, without a web view.                              |
-| `cargo test --workspace` | The domain and the desktop crate tests.                            |
+| Command                     | Purpose                                                            |
+| --------------------------- | ------------------------------------------------------------------ |
+| `pnpm dev`                  | Frontend only, in the browser.                                     |
+| `pnpm tauri:dev`            | The desktop application with hot reload.                           |
+| `pnpm tauri:build`          | The installable application.                                       |
+| `pnpm test`                 | Frontend unit and component tests.                                 |
+| `pnpm lint`                 | ESLint, including the type aware rules.                            |
+| `pnpm typecheck`            | TypeScript without emitting.                                       |
+| `pnpm format:check`         | Prettier, in check mode.                                           |
+| `pnpm check`                | Everything above plus the Rust checks and the binding drift check. |
+| `pnpm generate:types`       | Regenerate the TypeScript bindings from the Rust types.            |
+| `pnpm fixtures:generate`    | Generate the synthetic test fixtures.                              |
+| `cargo test -p ufc-core`    | The domain tests, without a web view.                              |
+| `cargo test -p ufc-engines` | The engine adapter tests, including the real conversions.          |
+| `cargo test --workspace`    | The domain and the desktop crate tests.                            |
 
 The generated TypeScript bindings in `src/types/generated/` are committed on purpose. CI regenerates them and fails when the committed copy is stale.
 
