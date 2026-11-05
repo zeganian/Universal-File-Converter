@@ -24,7 +24,7 @@ use ufc_core::domain::conversion::{
     EngineStatus, ValidationLevel,
 };
 use ufc_core::domain::error::{ConversionError, ConversionErrorCode, DomainResult};
-use ufc_core::domain::format::from_extension;
+use ufc_core::domain::format::{from_extension, stores_transparency};
 use ufc_core::domain::job::{validate_transition, JobStatus, Progress};
 use ufc_core::domain::registry::{CapabilityRegistry, ConversionCapability};
 use ufc_core::engines::adapter::{
@@ -255,7 +255,7 @@ impl ConversionService {
         let produced = job_directory.join(output_file_name(&input_path, &request.target_format));
 
         let validation_level = match adapter
-            .validate_output(&produced)
+            .validate_output(&produced, &request.target_format)
             .and_then(|level| validation::compare_dimensions(&input_path, &produced).map(|_| level))
         {
             Ok(level) => level,
@@ -285,9 +285,9 @@ impl ConversionService {
         let _ = std::fs::remove_dir_all(&job_directory);
 
         let mut warnings = Vec::new();
-        if validation::png_has_alpha(&input_path) {
+        if !stores_transparency(&request.target_format) && validation::png_has_alpha(&input_path) {
             warnings.push(
-                "The source image has an alpha channel. It was flattened onto a solid background, because JPEG cannot store transparency."
+                "The source image has an alpha channel. It was flattened onto a solid background, because the target format cannot store transparency."
                     .to_owned(),
             );
         }

@@ -6,7 +6,9 @@ import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/Badge';
 import { useAppInfo } from '@/app/useAppInfo';
 import { inspectFiles, startConversion } from '@/lib/ipc';
+import type { CapabilitySummary } from '@/lib/ipc';
 import { formatBytes } from '@/lib/format';
+import type { ConversionCapability } from '@/types/generated/ConversionCapability';
 import type { FileInspection } from '@/types/generated/FileInspection';
 import type { OverwritePolicy } from '@/types/generated/OverwritePolicy';
 
@@ -107,6 +109,42 @@ export function FileIntake({
 }
 
 /**
+ * The options that every selected file accepts for a target format.
+ *
+ * The registry declares the options of every pair, so the interface
+ * never offers a setting that the engine would ignore. An option is
+ * only offered when it has an effect on every selected file.
+ */
+function acceptedOptionsOf(
+  capabilities: CapabilitySummary | null,
+  files: readonly FileInspection[],
+  target: string,
+): { quality: boolean; background: boolean } {
+  if (!capabilities || files.length === 0 || target === '') {
+    return { quality: false, background: false };
+  }
+
+  const pairs: ConversionCapability[] = [];
+
+  for (const file of files) {
+    const pair = capabilities.capabilities.find(
+      (capability) =>
+        capability.available &&
+        capability.sourceFormat === file.format &&
+        capability.targetFormat === target,
+    );
+
+    if (!pair) return { quality: false, background: false };
+    pairs.push(pair);
+  }
+
+  return {
+    quality: pairs.every((pair) => pair.options.quality),
+    background: pairs.every((pair) => pair.options.background),
+  };
+}
+
+/**
  * The Convert screen.
  *
  * The list of target formats comes from the capability registry of the
@@ -123,6 +161,7 @@ export function ConvertPage() {
   const [outputDirectory, setOutputDirectory] = useState('');
   const [policy, setPolicy] = useState<OverwritePolicy>('rename');
   const [quality, setQuality] = useState(92);
+  const [background, setBackground] = useState('white');
   const [failure, setFailure] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
 
@@ -175,8 +214,16 @@ export function ConvertPage() {
   // The target that is actually used. A selection that is not offered
   // anymore falls back to the first available target, so that the
   // selection never shows a format the backend does not support.
-  const target =
-    selectedTarget && targets.includes(selectedTarget) ? selectedTarget : (targets[0] ?? '');
+  const target = useMemo(
+    () =>
+      selectedTarget && targets.includes(selectedTarget) ? selectedTarget : (targets[0] ?? ''),
+    [selectedTarget, targets],
+  );
+
+  // The options of the selected pair. The registry declares them, so
+  // the interface never offers a setting that the engine ignores
+  // (`SUPPORTED_FORMATS.md`, "Registry rules").
+  const acceptedOptions = acceptedOptionsOf(capabilities, convertible, target);
 
   const canConvert = convertible.length > 0 && target !== '' && outputDirectory !== '';
 
@@ -187,6 +234,13 @@ export function ConvertPage() {
     setFailure(null);
 
     try {
+      // Only the options that the selected pair accepts are sent, so
+      // that the backend never receives a setting it would reject.
+      const options: { quality?: number; background?: string } = {};
+
+      if (acceptedOptions.quality) options.quality = quality;
+      if (acceptedOptions.background) options.background = background;
+
       for (const inspection of convertible) {
         await startConversion({
           fileId: crypto.randomUUID(),
@@ -194,7 +248,7 @@ export function ConvertPage() {
           targetFormat: target,
           outputDirectory,
           overwritePolicy: policy,
-          options: { quality },
+          options,
         });
       }
 
@@ -203,7 +257,17 @@ export function ConvertPage() {
       setFailure(cause instanceof Error ? cause.message : 'The conversion could not be started.');
       setIsStarting(false);
     }
-  }, [canConvert, convertible, target, outputDirectory, policy, quality, navigate]);
+  }, [
+    canConvert,
+    convertible,
+    target,
+    outputDirectory,
+    policy,
+    quality,
+    background,
+    acceptedOptions,
+    navigate,
+  ]);
 
   const chooseOutputDirectory = useCallback(async () => {
     try {
@@ -357,23 +421,45 @@ export function ConvertPage() {
             </p>
           </div>
 
-          <div className="field">
-            <label className="field__label" htmlFor="quality-range">
-              Quality
-            </label>
-            <input
-              id="quality-range"
-              className="field__control"
-              type="range"
-              min={1}
-              max={100}
-              value={quality}
-              onChange={(event) => setQuality(Number(event.target.value))}
-            />
-            <p className="field__hint">
-              Higher quality means a larger file. Current value: {quality}.
-            </p>
-          </div>
+          {acceptedOptions.quality ? (
+            <div className="field">
+              <label className="field__label" htmlFor="quality-range">
+                Quality
+              </label>
+              <input
+                id="quality-range"
+                className="field__control"
+                type="range"
+                min={1}
+                max={100}
+                value={quality}
+                onChange={(event) => setQuality(Number(event.target.value))}
+              />
+              <p className="field__hint">
+                Higher quality means a larger file. Current value: {quality}.
+              </p>
+            </div>
+          ) : null}
+
+          {acceptedOptions.background ? (
+            <div className="field">
+              <label className="field__label" htmlFor="background-input">
+                Background colour
+              </label>
+              <input
+                id="background-input"
+                className="field__control"
+                type="text"
+                value={background}
+                onChange={(event) => setBackground(event.target.value)}
+              />
+              <p className="field__hint">
+                The target format cannot store transparency. Transparent areas are flattened onto
+                this colour. Use a colour name such as <code>white</code> or a hex value such as{' '}
+                <code>#ffffff</code>.
+              </p>
+            </div>
+          ) : null}
 
           <button
             type="button"

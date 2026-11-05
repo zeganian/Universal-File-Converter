@@ -68,6 +68,33 @@ pub struct EngineVersionRange {
     pub max: String,
 }
 
+/// The options a conversion pair accepts.
+///
+/// The options are part of the pair, not of the engine: a lossy target
+/// has an encoder quality, while a lossless target has none
+/// (`SUPPORTED_FORMATS.md`, "Images"). The interface uses this
+/// information to offer only the options that have an effect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct CapabilityOptions {
+    /// The pair accepts an encoder quality between 1 and 100.
+    pub quality: bool,
+    /// The pair accepts a background colour, for a target that cannot
+    /// store transparency.
+    pub background: bool,
+}
+
+impl CapabilityOptions {
+    /// Returns options that the pair does not accept.
+    pub const fn none() -> Self {
+        Self {
+            quality: false,
+            background: false,
+        }
+    }
+}
+
 /// A single source-to-target conversion capability.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -86,6 +113,8 @@ pub struct ConversionCapability {
     pub status: PairStatus,
     /// Identifier of the validation strategy used for the output.
     pub validation_strategy: String,
+    /// The options that the pair accepts.
+    pub options: CapabilityOptions,
     /// User facing limitations of this pair.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub limitations: Vec<String>,
@@ -106,6 +135,7 @@ impl ConversionCapability {
             engine_version_range: None,
             status: PairStatus::Planned,
             validation_strategy: "none".to_owned(),
+            options: CapabilityOptions::none(),
             limitations: Vec::new(),
             available: false,
         }
@@ -356,5 +386,35 @@ mod tests {
 
         assert!(registry.find(&png, &pdf).is_some());
         assert!(registry.find(&png, &other).is_none());
+    }
+
+    #[test]
+    fn a_planned_pair_declares_no_options() {
+        let capability = capability("png", "pdf", PairStatus::Planned);
+
+        assert!(!capability.options.quality);
+        assert!(!capability.options.background);
+    }
+
+    #[test]
+    fn the_options_are_part_of_the_wire_format() {
+        let mut capability = capability("png", "jpeg", PairStatus::Stable);
+        capability.options = CapabilityOptions {
+            quality: true,
+            background: true,
+        };
+
+        let json = serde_json::to_value(&capability).expect("serializable");
+
+        assert_eq!(
+            json.get("options")
+                .and_then(|options| options.get("quality")),
+            Some(&serde_json::Value::Bool(true))
+        );
+        assert_eq!(
+            json.get("options")
+                .and_then(|options| options.get("background")),
+            Some(&serde_json::Value::Bool(true))
+        );
     }
 }

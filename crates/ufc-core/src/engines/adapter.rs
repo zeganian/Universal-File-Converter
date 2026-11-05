@@ -131,9 +131,14 @@ pub trait EngineAdapter: Send + Sync {
     }
 
     /// Validates a produced output file.
+    ///
+    /// The expected format is part of the call: an adapter validates
+    /// the output against the format the user asked for, not against
+    /// the format the engine likes to write.
     fn validate_output(
         &self,
         _path: &std::path::Path,
+        _target_format: &FormatId,
     ) -> DomainResult<crate::domain::conversion::ValidationLevel> {
         Err(crate::domain::error::ConversionError::new(
             crate::domain::error::ConversionErrorCode::Internal,

@@ -104,6 +104,15 @@ pub fn from_extension(extension: &str) -> Option<FormatId> {
     FormatId::new(format)
 }
 
+/// Returns `true` when the format can store transparency.
+///
+/// The knowledge belongs to the format, not to an engine: a PNG keeps
+/// its alpha channel, a JPEG cannot store one (`SUPPORTED_FORMATS.md`,
+/// "Images").
+pub fn stores_transparency(format: &FormatId) -> bool {
+    matches!(format.as_str(), "png" | "gif" | "webp" | "tiff" | "svg")
+}
+
 impl fmt::Display for FormatId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
@@ -184,5 +193,13 @@ mod tests {
         assert!(from_extension("").is_none());
         assert!(from_extension("xyz").is_none());
         assert!(from_extension("tar.gz").is_none());
+    }
+
+    #[test]
+    fn only_the_formats_that_can_hold_an_alpha_channel_are_reported() {
+        assert!(stores_transparency(&FormatId::new("png").expect("valid")));
+        assert!(stores_transparency(&FormatId::new("gif").expect("valid")));
+        assert!(!stores_transparency(&FormatId::new("jpeg").expect("valid")));
+        assert!(!stores_transparency(&FormatId::new("pdf").expect("valid")));
     }
 }

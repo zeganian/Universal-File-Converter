@@ -185,17 +185,19 @@ jobs:
         run: cargo test -p ufc-engines --locked
 
       # The integration test skips itself when no engine is installed.
-      # This step fails when a test was skipped, so that the pair can
+      # This step fails when a test was skipped, so that a pair can
       # never be reported as tested without a real conversion.
-      - name: The integration test really ran
+      - name: The integration tests really ran
         run: |
           set -euo pipefail
-          output="$(cargo test -p ufc-engines --locked --test conversion_png_to_jpeg -- --nocapture 2>&1)"
-          printf '%s\n' "$output"
-          if printf '%s' "$output" | grep -q '^skipped:'; then
-            echo "The integration test was skipped, the engine was not used." >&2
-            exit 1
-          fi
+          for test_file in conversion_png_to_jpeg conversion_jpeg_to_png; do
+            output="$(cargo test -p ufc-engines --locked --test "$test_file" -- --nocapture 2>&1)"
+            printf '%s\n' "$output"
+            if printf '%s' "$output" | grep -q '^skipped:'; then
+              echo "The integration test ${test_file} was skipped, the engine was not used." >&2
+              exit 1
+            fi
+          done
 
   rust-desktop:
     name: Rust desktop checks

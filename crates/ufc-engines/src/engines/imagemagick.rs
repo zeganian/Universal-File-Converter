@@ -1,9 +1,9 @@
 //! The ImageMagick adapter.
 //!
-//! The adapter converts a PNG image into a JPEG image with ImageMagick
-//! 7. It is the first implemented engine of the application and the
-//! reference implementation of the adapter contract
-//! (`ARCHITECTURE.md` section 4).
+//! The adapter converts a PNG image into a JPEG image and a JPEG image
+//! into a PNG image with ImageMagick 7. It is the first implemented
+//! engine of the application and the reference implementation of the
+//! adapter contract (`ARCHITECTURE.md` section 4).
 //!
 //! The adapter never builds a shell command string: it produces an
 //! executable path and an argument vector, and the paths it uses are
@@ -18,9 +18,11 @@ use ufc_core::domain::conversion::{
     ValidationLevel,
 };
 use ufc_core::domain::error::{ConversionError, ConversionErrorCode, DomainResult};
-use ufc_core::domain::format::FormatId;
+use ufc_core::domain::format::{stores_transparency, FormatId};
 use ufc_core::domain::job::Progress;
-use ufc_core::domain::registry::{ConversionCapability, EngineVersionRange, PairStatus};
+use ufc_core::domain::registry::{
+    CapabilityOptions, ConversionCapability, EngineVersionRange, PairStatus,
+};
 use ufc_core::engines::adapter::{
     CancellationSignal, EngineAdapter, EngineInvocation, EngineOutcome, ValidatedConversion,
 };
@@ -50,6 +52,12 @@ pub const DEFAULT_QUALITY: u8 = 92;
 /// The default background colour for a target that cannot store
 /// transparency.
 pub const DEFAULT_BACKGROUND: &str = "white";
+
+/// The compression level of a PNG file.
+///
+/// PNG is lossless, so the size of the file is the only thing the
+/// encoder can trade. The highest level produces the smallest file.
+const PNG_COMPRESSION_LEVEL: u8 = 9;
 
 /// A detected ImageMagick installation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,17 +92,27 @@ impl ImageMagickAdapter {
         self.installation.as_ref()
     }
 
-    /// Returns the source format of the implemented pair.
+    /// Returns the source format of the PNG to JPEG pair.
     pub fn source_format() -> FormatId {
         FormatId::new("png").expect("the source format is a valid identifier")
     }
 
-    /// Returns the target format of the implemented pair.
+    /// Returns the target format of the PNG to JPEG pair.
     pub fn target_format() -> FormatId {
         FormatId::new("jpeg").expect("the target format is a valid identifier")
     }
 
-    /// Returns the capability of the implemented pair.
+    /// Returns the source format of the JPEG to PNG pair.
+    pub fn jpeg_source_format() -> FormatId {
+        FormatId::new("jpeg").expect("the source format is a valid identifier")
+    }
+
+    /// Returns the target format of the JPEG to PNG pair.
+    pub fn jpeg_target_format() -> FormatId {
+        FormatId::new("png").expect("the target format is a valid identifier")
+    }
+
+    /// Returns the capability of the PNG to JPEG pair.
     pub fn capability() -> ConversionCapability {
         ConversionCapability {
             source_format: Self::source_format(),
@@ -109,12 +127,55 @@ impl ImageMagickAdapter {
             // 13 pass on the other platforms as well.
             status: PairStatus::Experimental,
             validation_strategy: "independent-jpeg-decoder".to_owned(),
+            options: CapabilityOptions {
+                quality: true,
+                background: true,
+            },
             limitations: vec![
                 "JPEG cannot store transparency. The source is flattened onto a solid background, by default white.".to_owned(),
                 "JPEG is a lossy format. The output does not reproduce the source pixel for pixel.".to_owned(),
             ],
             available: false,
         }
+    }
+
+    /// Returns the capability of the JPEG to PNG pair.
+    pub fn jpeg_to_png_capability() -> ConversionCapability {
+        ConversionCapability {
+            source_format: Self::jpeg_source_format(),
+            target_format: Self::jpeg_target_format(),
+            engine_id: EngineId::new(ENGINE_ID).expect("the engine id is valid"),
+            engine_version_range: Some(EngineVersionRange {
+                min: MIN_TESTED_VERSION.to_owned(),
+                max: MAX_TESTED_VERSION.to_owned(),
+            }),
+            status: PairStatus::Experimental,
+            validation_strategy: "independent-png-decoder".to_owned(),
+            options: CapabilityOptions {
+                // PNG is lossless. There is no encoder quality that
+                // would change the picture.
+                quality: false,
+                background: false,
+            },
+            limitations: vec![
+                "PNG is lossless. The output reproduces the source pixel for pixel, but it is usually larger than the JPEG.".to_owned(),
+                "The size of the file is decided by the compression level, not by a quality setting.".to_owned(),
+            ],
+            available: false,
+        }
+    }
+
+    /// Returns the capability of a pair, when the adapter performs it.
+    pub fn capability_for(source: &FormatId, target: &FormatId) -> Option<ConversionCapability> {
+        if source == &Self::source_format() && target == &Self::target_format() {
+            return Some(Self::capability());
+        }
+
+        if source == &Self::jpeg_source_format() && target == &Self::jpeg_target_format() {
+            return Some(Self::jpeg_to_png_capability());
+        }
+
+        None
     }
 }
 
@@ -253,20 +314,22 @@ impl EngineAdapter for ImageMagickAdapter {
     }
 
     fn capabilities(&self) -> Vec<ConversionCapability> {
-        vec![Self::capability()]
+        vec![Self::capability(), Self::jpeg_to_png_capability()]
     }
 
     fn validate_request(&self, request: &ValidatedConversion) -> DomainResult<()> {
-        if request.target_format != Self::target_format() {
-            return Err(ufc_core::domain::conversion::unsupported_pair(
-                &Self::source_format(),
-                &request.target_format,
-            ));
-        }
+        let capability = Self::capability_for(&request.source_format, &request.target_format)
+            .ok_or_else(|| {
+                ufc_core::domain::conversion::unsupported_pair(
+                    &request.source_format,
+                    &request.target_format,
+                )
+            })?;
 
         request.options.validate()?;
+        validate_options(&request.options, &capability.options)?;
 
-        validate_source_file(&request.input_path)?;
+        validate_source_file(&request.input_path, &request.source_format)?;
 
         let metadata = std::fs::metadata(&request.output_directory).map_err(|source| {
             ConversionError::new(
@@ -291,33 +354,46 @@ impl EngineAdapter for ImageMagickAdapter {
             detection::missing_engine_error(DISPLAY_NAME, &detection::imagemagick_install_hint())
         })?;
 
-        let quality = request.options.quality.unwrap_or(DEFAULT_QUALITY);
-        let background = request
-            .options
-            .background
-            .as_deref()
-            .unwrap_or(DEFAULT_BACKGROUND);
-
         let output_path = request.output_directory.join(output_file_name(
             &request.input_path,
             &request.target_format,
         ));
 
-        let args = vec![
-            request.input_path.to_string_lossy().to_string(),
+        let mut args = vec![request.input_path.to_string_lossy().to_string()];
+
+        if stores_transparency(&request.target_format) {
+            // The target keeps its alpha channel, so nothing is
+            // flattened and no background is needed.
+            args.extend([
+                "-define".to_owned(),
+                format!("png:compression-level={PNG_COMPRESSION_LEVEL}"),
+            ]);
+        } else {
+            let quality = request.options.quality.unwrap_or(DEFAULT_QUALITY);
+            let background = request
+                .options
+                .background
+                .as_deref()
+                .unwrap_or(DEFAULT_BACKGROUND);
+
             // JPEG has no alpha channel. The source is composited onto a
             // solid background so that transparent areas do not turn
             // into black.
-            "-background".to_owned(),
-            background.to_owned(),
-            "-alpha".to_owned(),
-            "remove".to_owned(),
-            "-alpha".to_owned(),
-            "off".to_owned(),
-            "-quality".to_owned(),
-            quality.to_string(),
-            // Resource limits keep a hostile or broken input from
-            // exhausting the machine.
+            args.extend([
+                "-background".to_owned(),
+                background.to_owned(),
+                "-alpha".to_owned(),
+                "remove".to_owned(),
+                "-alpha".to_owned(),
+                "off".to_owned(),
+                "-quality".to_owned(),
+                quality.to_string(),
+            ]);
+        }
+
+        // Resource limits keep a hostile or broken input from
+        // exhausting the machine.
+        args.extend([
             "-limit".to_owned(),
             "memory".to_owned(),
             "256MiB".to_owned(),
@@ -325,7 +401,7 @@ impl EngineAdapter for ImageMagickAdapter {
             "map".to_owned(),
             "512MiB".to_owned(),
             output_path.to_string_lossy().to_string(),
-        ];
+        ]);
 
         Ok(EngineInvocation::new(
             installation.program.clone(),
@@ -390,17 +466,50 @@ impl EngineAdapter for ImageMagickAdapter {
         })
     }
 
-    fn validate_output(&self, path: &Path) -> DomainResult<ValidationLevel> {
-        validation::validate_jpeg(path)
+    fn validate_output(
+        &self,
+        path: &Path,
+        target_format: &FormatId,
+    ) -> DomainResult<ValidationLevel> {
+        validation::validate_image(path, target_format)
     }
 }
 
-/// Checks the source file of a PNG to JPEG conversion.
+/// Checks the options against the ones the pair accepts.
+///
+/// An option that the pair does not accept is rejected instead of
+/// being silently ignored: a quality setting on a lossless target
+/// would tell the user that the file is compressed, while the encoder
+/// ignores the setting completely.
+fn validate_options(
+    options: &ufc_core::domain::conversion::ConversionOptions,
+    accepted: &CapabilityOptions,
+) -> DomainResult<()> {
+    if options.quality.is_some() && !accepted.quality {
+        return Err(ConversionError::new(
+            ConversionErrorCode::InvalidOptions,
+            "This conversion does not accept a quality setting.",
+        )
+        .with_remediation("Remove the quality setting and convert the file again."));
+    }
+
+    if options.background.is_some() && !accepted.background {
+        return Err(ConversionError::new(
+            ConversionErrorCode::InvalidOptions,
+            "This conversion does not accept a background colour.",
+        )
+        .with_remediation("Remove the background colour and convert the file again."));
+    }
+
+    Ok(())
+}
+
+/// Checks the source file of a conversion.
 ///
 /// The extension and the content have to agree: a file that is named
 /// `.png` but contains something else is rejected instead of being
 /// handed to the engine (`ARCHITECTURE.md` section 7).
-fn validate_source_file(path: &Path) -> DomainResult<()> {
+fn validate_source_file(path: &Path, source_format: &FormatId) -> DomainResult<()> {
     let metadata = std::fs::metadata(path).map_err(|source| {
         ConversionError::new(
             ConversionErrorCode::InvalidSource,
@@ -426,14 +535,21 @@ fn validate_source_file(path: &Path) -> DomainResult<()> {
 
     // The content is checked, not only the name of the file: a text
     // file that is called `.png` is not a PNG image.
-    let is_png = detected
-        .map(|kind| kind.mime_type() == "image/png" || kind.extension() == "png")
+    let expected = expected_extension(source_format).ok_or_else(|| {
+        ufc_core::domain::conversion::unsupported_pair(source_format, source_format)
+    })?;
+
+    let is_expected = detected
+        .map(|kind| kind.extension() == expected)
         .unwrap_or(false);
 
-    if !is_png {
+    if !is_expected {
         return Err(ConversionError::new(
             ConversionErrorCode::UndetectedFormat,
-            "The source file is not a PNG image.",
+            format!(
+                "The source file is not a {} image.",
+                expected_name(source_format)
+            ),
         ));
     }
 
@@ -442,17 +558,45 @@ fn validate_source_file(path: &Path) -> DomainResult<()> {
         .map(|extension| extension.to_string_lossy().to_lowercase())
         .unwrap_or_default();
 
-    if extension != "png" {
+    let extension_format =
+        ufc_core::domain::format::from_extension(&extension).map(|id| id.to_string());
+
+    if extension_format.as_deref() != Some(source_format.as_str()) {
         return Err(ConversionError::new(
             ConversionErrorCode::FormatMismatch,
             format!(
-                "The file extension is '{extension}', but the content of the file is a PNG image."
+                "The file extension is '{extension}', but the content of the file is a {} image.",
+                expected_name(source_format)
             ),
         )
-        .with_remediation("Rename the file to end in '.png' to convert it."));
+        .with_remediation(format!(
+            "Rename the file to end in '.{}' to convert it.",
+            expected_extension(source_format).unwrap_or_default()
+        )));
     }
 
     Ok(())
+}
+
+/// Returns the extension that a source file of a format carries.
+///
+/// The extension is the one of the format, not of the engine: JPEG
+/// files are called `.jpg`, like the users expect.
+fn expected_extension(format: &FormatId) -> Option<&'static str> {
+    match format.as_str() {
+        "png" => Some("png"),
+        "jpeg" => Some("jpg"),
+        _ => None,
+    }
+}
+
+/// Returns the name of a format, as it is shown to the user.
+fn expected_name(format: &FormatId) -> &str {
+    match format.as_str() {
+        "png" => "PNG",
+        "jpeg" => "JPEG",
+        other => other,
+    }
 }
 
 /// Shortens the captured error output of the engine.
@@ -588,5 +732,98 @@ mod tests {
         let error = adapter.build_invocation(&request).expect_err("must fail");
 
         assert_eq!(error.code, ConversionErrorCode::MissingDependency);
+    }
+
+    #[test]
+    fn the_capability_is_found_for_every_implemented_pair() {
+        let png = ImageMagickAdapter::source_format();
+        let jpeg = ImageMagickAdapter::target_format();
+
+        let capability =
+            ImageMagickAdapter::capability_for(&png, &jpeg).expect("the pair is implemented");
+        assert_eq!(capability.source_format, png);
+        assert_eq!(capability.target_format, jpeg);
+        assert!(capability.options.quality);
+        assert!(capability.options.background);
+
+        let capability =
+            ImageMagickAdapter::capability_for(&jpeg, &png).expect("the pair is implemented");
+        assert_eq!(capability.source_format, jpeg);
+        assert_eq!(capability.target_format, png);
+        assert!(
+            !capability.options.quality,
+            "PNG is lossless, there is no quality to choose"
+        );
+        assert!(
+            !capability.options.background,
+            "PNG stores transparency, there is no background to choose"
+        );
+    }
+
+    #[test]
+    fn a_pair_that_is_not_implemented_has_no_capability() {
+        let png = ImageMagickAdapter::source_format();
+        let pdf = FormatId::new("pdf").expect("valid");
+
+        assert!(ImageMagickAdapter::capability_for(&png, &pdf).is_none());
+    }
+
+    #[test]
+    fn the_invocation_of_the_jpeg_to_png_pair_keeps_the_alpha_channel() {
+        let adapter = ImageMagickAdapter {
+            installation: Some(Installation {
+                program: PathBuf::from("/usr/bin/magick"),
+                version: "7.1.2-34".to_owned(),
+            }),
+        };
+
+        let request = ValidatedConversion {
+            input_path: PathBuf::from("/tmp/photo.jpg"),
+            source_format: ImageMagickAdapter::jpeg_source_format(),
+            target_format: ImageMagickAdapter::jpeg_target_format(),
+            output_directory: PathBuf::from("/tmp/out"),
+            overwrite_policy: OverwritePolicy::Skip,
+            options: Default::default(),
+        };
+
+        let invocation = adapter.build_invocation(&request).expect("invocation");
+
+        assert_eq!(invocation.args.first().unwrap(), "/tmp/photo.jpg");
+        assert!(
+            !invocation.args.iter().any(|argument| argument == "remove"),
+            "a target that stores transparency is never flattened"
+        );
+        assert!(
+            !invocation
+                .args
+                .iter()
+                .any(|argument| argument == "-quality"),
+            "a lossless target has no quality setting"
+        );
+        assert!(
+            invocation
+                .args
+                .iter()
+                .any(|argument| argument.starts_with("png:compression-level")),
+            "the compression level of the PNG is set"
+        );
+        assert_eq!(invocation.args.last().unwrap(), "/tmp/out/photo.png");
+    }
+
+    #[test]
+    fn a_quality_setting_is_rejected_for_a_pair_that_does_not_accept_it() {
+        let adapter = ImageMagickAdapter::new();
+        let request = ValidatedConversion {
+            input_path: PathBuf::from("/tmp/photo.jpg"),
+            source_format: ImageMagickAdapter::jpeg_source_format(),
+            target_format: ImageMagickAdapter::jpeg_target_format(),
+            output_directory: PathBuf::from("/tmp/out"),
+            overwrite_policy: OverwritePolicy::Skip,
+            options: ufc_core::domain::conversion::ConversionOptions::new().with_quality(80),
+        };
+
+        let error = adapter.validate_request(&request).expect_err("must fail");
+
+        assert_eq!(error.code, ConversionErrorCode::InvalidOptions);
     }
 }

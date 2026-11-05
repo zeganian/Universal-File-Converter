@@ -40,7 +40,7 @@ Actual engine versions and availability will be documented per release and platf
 
 The application foundation is in place: the Tauri shell, the typed command boundary, the domain model, the capability registry, the five screens, and the automated checks.
 
-**One conversion pair is implemented: PNG to JPEG, with ImageMagick 7.** The pair is _experimental_: the engine, the integration tests and the output validation exist, but the release gates of `TESTING.md` have not run on Windows and macOS yet. Every other pair in the matrix is still _planned_, and the interface reports it as such instead of offering a conversion that would fail. A pair only becomes selectable after an engine adapter, an integration fixture, an output validation, and a documentation entry exist.
+**Two conversion pairs are implemented: PNG to JPEG and JPEG to PNG, with ImageMagick 7.** The pairs are _experimental_: the engine, the integration tests and the output validation exist, but the release gates of `TESTING.md` have not run on Windows and macOS yet. Every other pair in the matrix is still _planned_, and the interface reports it as such instead of offering a conversion that would fail. A pair only becomes selectable after an engine adapter, an integration fixture, an output validation, and a documentation entry exist.
 
 No conversion pair should be considered stable until it is implemented and passes the quality gates in `TESTING.md`.
 

@@ -40,12 +40,24 @@ function mockBackend(options: { availableConversions: boolean; engineCount: numb
             engineVersionRange: { min: '7.1.0', max: '7.99.99' },
             status: 'experimental',
             validationStrategy: 'independent-jpeg-decoder',
+            options: { quality: true, background: true },
+            limitations: [],
+            available: true,
+          },
+          {
+            sourceFormat: 'jpeg',
+            targetFormat: 'png',
+            engineId: 'imagemagick',
+            engineVersionRange: { min: '7.1.0', max: '7.99.99' },
+            status: 'experimental',
+            validationStrategy: 'independent-png-decoder',
+            options: { quality: false, background: false },
             limitations: [],
             available: true,
           },
         ]
       : [],
-    availableCount: options.availableConversions ? 1 : 0,
+    availableCount: options.availableConversions ? 2 : 0,
     hasAvailableConversions: options.availableConversions,
   });
 
@@ -71,6 +83,21 @@ function mockInspection() {
       parentDirectory: '/home/user',
       sizeBytes: 2048,
       format: 'png',
+      detection: 'extension',
+      extensionMismatch: false,
+      readable: true,
+    },
+  ]);
+}
+
+function mockJpegInspection() {
+  vi.mocked(inspectFiles).mockResolvedValue([
+    {
+      path: '/home/user/photo.jpg',
+      fileName: 'photo.jpg',
+      parentDirectory: '/home/user',
+      sizeBytes: 2048,
+      format: 'jpeg',
       detection: 'extension',
       extensionMismatch: false,
       readable: true,
@@ -225,5 +252,88 @@ describe('ConvertPage', () => {
 
     expect(await screen.findByText('The file could not be read')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Convert file/i })).not.toBeInTheDocument();
+  });
+
+  it('offers the quality and the background for a lossy target', async () => {
+    const user = userEvent.setup();
+    mockBackend({ availableConversions: true, engineCount: 1 });
+    mockInspection();
+    vi.mocked(open).mockResolvedValue('/home/user/photo.png');
+
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: 'Add files' }));
+    await screen.findByRole('combobox', { name: 'Format' });
+
+    expect(screen.getByRole('slider', { name: 'Quality' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Background colour' })).toBeInTheDocument();
+  });
+
+  it('offers neither a quality nor a background for a lossless target', async () => {
+    const user = userEvent.setup();
+    mockBackend({ availableConversions: true, engineCount: 1 });
+    mockJpegInspection();
+    vi.mocked(open).mockResolvedValue('/home/user/photo.jpg');
+
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: 'Add files' }));
+
+    const select = await screen.findByRole('combobox', { name: 'Format' });
+    expect(within(select).getByRole('option', { name: 'PNG' })).toBeInTheDocument();
+
+    expect(screen.queryByRole('slider', { name: 'Quality' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Background colour' })).not.toBeInTheDocument();
+  });
+
+  it('sends only the options that the pair accepts', async () => {
+    const user = userEvent.setup();
+    mockBackend({ availableConversions: true, engineCount: 1 });
+    mockJpegInspection();
+    vi.mocked(open).mockResolvedValue('/home/user/photo.jpg');
+    vi.mocked(startConversion).mockResolvedValue({
+      jobId: 'job-1',
+      status: 'queued',
+      progress: { kind: 'indeterminate' },
+      validationLevel: 'exists',
+    });
+
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: 'Add files' }));
+    await screen.findByRole('combobox', { name: 'Format' });
+
+    await user.click(screen.getByRole('button', { name: /Convert file/i }));
+
+    await waitFor(() => expect(startConversion).toHaveBeenCalledTimes(1));
+
+    const request = vi.mocked(startConversion).mock.calls[0]?.[0];
+    expect(request?.targetFormat).toBe('png');
+    expect(request?.options).toEqual({});
+  });
+
+  it('sends the quality and the background of a lossy pair', async () => {
+    const user = userEvent.setup();
+    mockBackend({ availableConversions: true, engineCount: 1 });
+    mockInspection();
+    vi.mocked(open).mockResolvedValue('/home/user/photo.png');
+    vi.mocked(startConversion).mockResolvedValue({
+      jobId: 'job-1',
+      status: 'queued',
+      progress: { kind: 'indeterminate' },
+      validationLevel: 'exists',
+    });
+
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: 'Add files' }));
+    await screen.findByRole('combobox', { name: 'Format' });
+
+    await user.click(screen.getByRole('button', { name: /Convert file/i }));
+
+    await waitFor(() => expect(startConversion).toHaveBeenCalledTimes(1));
+
+    const request = vi.mocked(startConversion).mock.calls[0]?.[0];
+    expect(request?.options).toEqual({ quality: 92, background: 'white' });
   });
 });

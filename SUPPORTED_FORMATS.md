@@ -8,7 +8,7 @@ This document is the source of truth for user-visible conversion capabilities.
 
 ## Current implementation status
 
-**One conversion pair is implemented: PNG to JPEG, with ImageMagick 7.** It is registered in the capability registry with the status `Experimental`, so the interface offers it as soon as ImageMagick 7 is detected on the device. When the engine is missing, the pair is shown as unavailable together with the installation guidance, instead of failing later.
+**Two conversion pairs are implemented: PNG to JPEG and JPEG to PNG, with ImageMagick 7.** They are registered in the capability registry with the status `Experimental`, so the interface offers them as soon as ImageMagick 7 is detected on the device. When the engine is missing, the pairs are shown as unavailable together with the installation guidance, instead of failing later.
 
 Every other pair of the matrix below is still `Planned`. The Convert screen shows honestly that no other conversion is available, and the Engines screen reports which engines were detected.
 
@@ -38,7 +38,7 @@ A pair keeps its maturity status and, independently of it, is offered to the use
 | PDF    | JPEG   | Poppler                          | Planned        | Page range and quality options                |
 | PDF    | TXT    | Poppler                          | Planned        | Text extraction only; scanned pages need OCR  |
 | PNG    | JPEG   | ImageMagick / Rust image library | Experimental   | Transparency handling must be explicit        |
-| JPEG   | PNG    | ImageMagick / Rust image library | Planned        | Lossy source remains lossy                    |
+| JPEG   | PNG    | ImageMagick / Rust image library | Experimental   | Lossy source remains lossy                    |
 | PNG    | WebP   | ImageMagick / Rust image library | Planned        | Quality option                                |
 | WebP   | PNG    | ImageMagick / Rust image library | Planned        | Animated WebP requires separate handling      |
 | WAV    | MP3    | FFmpeg                           | Planned        | Codec availability varies by build            |
@@ -59,6 +59,17 @@ A pair keeps its maturity status and, independently of it, is offered to the use
 - **Fixtures and test cases:** `crates/ufc-engines/tests/conversion_png_to_jpeg.rs` covers the happy path, the unchanged source file, the transparency warning, an existing output, the renaming policy, a malformed source, the quality option and the repository fixture. The tests skip themselves when ImageMagick 7 is not installed.
 - **Limitations:** JPEG has no alpha channel; transparent areas are flattened onto the selected background and a warning is shown. JPEG is lossy. The source file is never modified.
 - **Maximum tested file size:** 64 × 64 pixels in the automated tests. This is a test result, not a product limit.
+- **License notes:** ImageMagick is used as a system dependency and is not bundled. Its license applies to the installation of the user, not to this repository.
+
+### JPEG to PNG
+
+- **Engine:** ImageMagick 7 (`magick`), system installation. The same installation and the same version range as the PNG to JPEG pair.
+- **Status:** `Experimental`. The pair is implemented and tested, but the release gates of `TESTING.md` section 5 have not run on Windows and macOS yet.
+- **Options:** none. PNG is lossless, so a quality setting would have no effect and a background colour is not needed, because PNG stores transparency. The registry declares the pair without options and the interface therefore offers neither control. A request that carries a quality or a background setting is rejected with `InvalidOptions` instead of being silently ignored.
+- **Output validation:** level 2 (`Parsed`). The output is checked with an independent PNG decoder and the PNG signature, not only by the exit code of the engine. The dimensions of the source and the output are compared.
+- **Fixtures and test cases:** `crates/ufc-engines/tests/conversion_jpeg_to_png.rs` covers the happy path, the unchanged source file, the absence of a transparency warning, a rejected quality setting, an existing output, the renaming policy and a malformed source. The tests skip themselves when ImageMagick 7 is not installed.
+- **Limitations:** the source stays lossy. Converting a JPEG into a PNG does not restore the quality that the JPEG lost. PNG is usually larger than the JPEG. The source file is never modified.
+- **Maximum tested file size:** 32 × 24 pixels in the automated tests. This is a test result, not a product limit.
 - **License notes:** ImageMagick is used as a system dependency and is not bundled. Its license applies to the installation of the user, not to this repository.
 
 ## Quality requirements
@@ -107,6 +118,8 @@ CSV does not preserve spreadsheet formulas, styles, charts, or multiple sheets. 
 ### Images
 
 JPEG does not support transparency. The UI must require or clearly apply a background color when converting transparent images to JPEG.
+
+The options of a pair belong to the pair, not to the engine. The capability registry declares them (`options.quality`, `options.background`), and the interface derives its controls from that declaration: a quality setting is only offered for a lossy target, and a background colour only for a target that cannot store transparency.
 
 ### Audio/video
 

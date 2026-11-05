@@ -31,6 +31,8 @@ pub mod prelude {
     pub use crate::domain::error::{ConversionError, ConversionErrorCode, DomainResult};
     pub use crate::domain::format::FormatId;
     pub use crate::domain::job::{JobStatus, Progress};
-    pub use crate::domain::registry::{CapabilityRegistry, ConversionCapability, PairStatus};
+    pub use crate::domain::registry::{
+        CapabilityOptions, CapabilityRegistry, ConversionCapability, PairStatus,
+    };
     pub use crate::engines::adapter::{EngineAdapter, EngineInvocation, ValidatedConversion};
 }
