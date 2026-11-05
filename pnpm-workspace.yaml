@@ -1,0 +1,12 @@
+# The build scripts of the dependencies have to be approved explicitly.
+#
+# pnpm 12 refuses to install a package whose build script was not
+# approved (`ERR_PNPM_IGNORED_BUILDS`), so the installation has to name
+# the dependency. Only esbuild needs it: it checks the binary of the
+# platform it was installed for.
+#
+# The file is also the place where the settings of the workspace live,
+# so the approval is committed and every machine and every runner uses
+# the same decision.
+allowBuilds:
+  esbuild: true

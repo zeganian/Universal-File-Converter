@@ -116,6 +116,8 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      # The job needs Node.js for the fixtures. pnpm is not used here,
+      # so the cache of pnpm is not enabled either.
       - name: Install Node.js
         uses: actions/setup-node@v5
         with:
