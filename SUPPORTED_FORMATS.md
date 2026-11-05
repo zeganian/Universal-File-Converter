@@ -52,7 +52,7 @@ A pair keeps its maturity status and, independently of it, is offered to the use
 
 ### PNG to JPEG
 
-- **Engine:** ImageMagick 7 (`magick`), system installation. Tested with 7.1.2-34 on Linux x64. The adapter accepts versions from 7.1.0 up to 7.99.99 and reports an incompatible version with installation guidance otherwise.
+- **Engine:** ImageMagick 7 (`magick`), system installation. Tested with 7.1.2-34 on Linux x64 and with the pinned 7.1.2-35 in the continuous integration. The adapter accepts versions from 7.1.0 up to 7.99.99 and reports an incompatible version with installation guidance otherwise.
 - **Status:** `Experimental`. The pair is implemented and tested, but the release gates of `TESTING.md` section 5 have not run on Windows and macOS yet.
 - **Options:** JPEG quality (1–100, default 92) and background colour for the alpha channel (default `white`).
 - **Output validation:** level 2 (`Parsed`). The output is checked with an independent JPEG decoder, not only by the exit code of the engine. The dimensions of the source and the output are compared.

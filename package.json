@@ -26,6 +26,7 @@
     "generate:types": "./scripts/generate-types.sh",
     "check:types-drift": "./scripts/check-types-drift.sh",
     "fixtures:generate": "node scripts/generate-fixtures.mjs",
+    "engine:install": "./scripts/install-imagemagick.sh",
     "check": "./scripts/check.sh",
     "prepare": "husky || true"
   },

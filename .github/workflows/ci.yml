@@ -16,6 +16,10 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # The ImageMagick version that the integration tests use. The version
+  # and the checksum are pinned in scripts/install-imagemagick.sh.
+  IMAGEMAGICK_VERSION: 7.1.2-35
+  IMAGEMAGICK_SHA256: 9554556c8cbf7d347cbd6bedae931ccf323a2bd5e0f08d4834856568ee19f080
 
 jobs:
   frontend:
@@ -34,6 +38,8 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      # The frozen lockfile fails when package.json and pnpm-lock.yaml
+      # disagree, so the build always uses the committed versions.
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -64,74 +70,130 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      # The cache key is built from the lockfile of the whole workspace.
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: crates/ufc-core
+          workspaces: .
 
       - name: Check formatting
         run: cargo fmt --all -- --check
 
       - name: Lint
-        run: cargo clippy -p ufc-core --all-targets -- -D warnings
+        run: cargo clippy -p ufc-core --all-targets --locked -- -D warnings
 
       - name: Unit and integration tests
-        run: cargo test -p ufc-core
+        run: cargo test -p ufc-core --locked
 
       - name: Generated TypeScript bindings are up to date
         run: ./scripts/check-types-drift.sh
 
   rust-engines:
-    name: Rust engine checks
+    name: Rust engine checks (ImageMagick 7)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # The integration test of the PNG to JPEG pair performs a real
-      # conversion, so ImageMagick 7 has to be installed on the runner.
-      # The distribution packages ship ImageMagick 6, which is a
-      # different program with a different command line.
-      - name: Install ImageMagick 7
+      # The build dependencies of ImageMagick. They come from the
+      # Ubuntu archive, so their versions are the ones of the release.
+      - name: Install the build dependencies of ImageMagick
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y software-properties-common
-          sudo add-apt-repository -y ppa:dcreurope/imagemagick7
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y imagemagick
-
-      - name: Check the engine version
-        run: |
-          magick -version
-          if ! magick -version | grep -q "Version: ImageMagick 7"; then
-            echo "ImageMagick 7 is required for the integration test." >&2
-            exit 1
-          fi
+          sudo apt-get install --no-install-recommends -y \
+            build-essential \
+            ca-certificates \
+            curl \
+            gettext \
+            libjpeg-turbo8-dev \
+            libpng-dev \
+            pkg-config \
+            xz-utils \
+            zlib1g-dev
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
 
+      - name: Install Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: crates/ufc-engines
+          workspaces: .
+
+      # The engine is built from the official source release and is
+      # cached, so only the first run pays for the compilation.
+      - name: Cache ImageMagick
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.home }}/imagemagick
+          key: imagemagick-${{ env.IMAGEMAGICK_VERSION }}-${{ env.IMAGEMAGICK_SHA256 }}
+
+      - name: Install ImageMagick 7
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          IMAGEMAGICK_PREFIX: ${{ github.home }}/imagemagick
+        run: ./scripts/install-imagemagick.sh
+
+      - name: Add ImageMagick to the path
+        run: echo "$HOME/imagemagick/bin" >> "$GITHUB_PATH"
+
+      # The integration tests must not silently skip, so the engine is
+      # verified before they run.
+      - name: Verify the engine
+        run: |
+          set -euo pipefail
+          version_output="$(magick -version)"
+          printf '%s\n' "$version_output"
+          case "$version_output" in
+            *"ImageMagick 7."*) ;;
+            *) echo "The engine is not ImageMagick 7." >&2; exit 1 ;;
+          esac
+          case "$version_output" in
+            *"ImageMagick ${IMAGEMAGICK_VERSION}"*) ;;
+            *) echo "The engine is not version ${IMAGEMAGICK_VERSION}." >&2; exit 1 ;;
+          esac
+          delegates="$(magick -list configure | grep -m1 '^DELEGATES' || true)"
+          printf '%s\n' "$delegates"
+          case "$delegates" in
+            *png*) ;;
+            *) echo "The engine has no PNG delegate." >&2; exit 1 ;;
+          esac
+          case "$delegates" in
+            *jpeg*) ;;
+            *) echo "The engine has no JPEG delegate." >&2; exit 1 ;;
+          esac
 
       - name: Check formatting
         run: cargo fmt --all -- --check
 
       - name: Lint
-        run: cargo clippy -p ufc-engines --all-targets -- -D warnings
-
-      - name: Unit and integration tests
-        run: cargo test -p ufc-engines
+        run: cargo clippy -p ufc-engines --all-targets --locked -- -D warnings
 
       - name: Generate the test fixtures
         run: node scripts/generate-fixtures.mjs
 
-      - name: Integration test with the repository fixtures
-        run: cargo test -p ufc-engines --test conversion_png_to_jpeg
+      - name: Unit and integration tests
+        run: cargo test -p ufc-engines --locked
+
+      # The integration test skips itself when no engine is installed.
+      # This step fails when a test was skipped, so that the pair can
+      # never be reported as tested without a real conversion.
+      - name: The integration test really ran
+        run: |
+          set -euo pipefail
+          output="$(cargo test -p ufc-engines --locked --test conversion_png_to_jpeg -- --nocapture 2>&1)"
+          printf '%s\n' "$output"
+          if printf '%s' "$output" | grep -q '^skipped:'; then
+            echo "The integration test was skipped, the engine was not used." >&2
+            exit 1
+          fi
 
   rust-desktop:
     name: Rust desktop checks
@@ -140,17 +202,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Install Tauri system dependencies
+      # The dependency list of Tauri 2 on Ubuntu 24.04. The indicator
+      # library of Ayatana replaces the original libappindicator3, and
+      # the two of them cannot be installed together.
+      - name: Install the Tauri system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libssl-dev \
             libgtk-3-dev \
-            libayatana-appindicator3-dev
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            patchelf \
+            build-essential \
+            file \
+            pkg-config \
+            wget \
+            curl
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # The Tauri build embeds the frontend, so it has to exist before
+      # the desktop crate is compiled.
+      - name: Build the frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -160,13 +246,74 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: .
 
       - name: Check formatting
         run: cargo fmt --all -- --check
 
       - name: Lint
-        run: cargo clippy -p universal-file-converter --all-targets -- -D warnings
+        run: cargo clippy -p universal-file-converter --all-targets --locked -- -D warnings
 
       - name: Unit and integration tests
-        run: cargo test -p universal-file-converter
+        run: cargo test -p universal-file-converter --locked
+
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # A failure on one platform does not hide the result of the
+      # other platforms.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install the Tauri system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            patchelf \
+            build-essential \
+            file \
+            pkg-config \
+            wget \
+            curl
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Build the frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+
+      # The lockfile must not change, so every platform builds exactly
+      # the committed versions.
+      - name: Build the workspace
+        run: cargo build --workspace --locked
+
+      - name: Test the domain crate
+        run: cargo test -p ufc-core --locked

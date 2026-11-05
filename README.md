@@ -54,6 +54,7 @@ No conversion pair should be considered stable until it is implemented and passe
 - `TESTING.md` — testing and release gates
 - `SECURITY.md` — security and privacy requirements
 - `docs/adr/` — architecture decision records
+- `docs/ci.md` — the continuous integration, its pinned versions and the system dependencies per operating system
 - `tests/` — test layers and fixtures
 
 ## Development setup
@@ -66,7 +67,7 @@ Prerequisites:
 - Rust stable toolchain
 - Tauri 2 platform prerequisites for the operating system
 
-Follow the official Tauri 2 prerequisites for your OS. On Debian and Ubuntu the desktop build needs the web view development packages, for example `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `librsvg2-dev`, `libayatana-appindicator3-dev` and `patchelf`.
+Follow the official Tauri 2 prerequisites for your OS. On Debian and Ubuntu the desktop build needs the web view development packages, for example `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `librsvg2-dev`, `libayatana-appindicator3-dev` and `patchelf`. The indicator library of Ayatana replaces the original `libappindicator3-dev`; the two of them cannot be installed together. The exact list per operating system is in `docs/ci.md`.
 
 ```bash
 pnpm install
